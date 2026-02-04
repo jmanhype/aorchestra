@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "id": "005-evaluation-harness-demo",
+  "title": "Evaluation harness and demo",
+  "section": "evaluation",
+  "state": "idea",
+  "overview": "Create a benchmark evaluation suite with 10+ diverse tasks. Implement automated scoring. Run against baselines. Generate comparison report.",
+  "branch": null,
+  "pr_url": null,
+  "pr_number": null,
+  "last_error": null,
+  "created_at": "2026-02-04T05:20:00.000Z",
+  "updated_at": "2026-02-04T05:20:00.000Z",
+  "problem_statement": "Need to demonstrate AOrchestra's effectiveness vs baselines with measurable metrics.",
+  "motivation": "Evaluation results feed directly into the Denario paper generation pipeline.",
+  "success_criteria": [
+    "10+ diverse benchmark tasks (math, code, research, planning)",
+    "Automated scoring (exact match + LLM-as-judge)",
+    "Comparison vs single-agent and static-roles baselines",
+    "JSON + markdown results report with accuracy, cost, latency metrics"
+  ],
+  "technical_constraints": [
+    "Depends on all previous items (001-004)",
+    "Must produce machine-readable results for Denario pipeline"
+  ]
+}

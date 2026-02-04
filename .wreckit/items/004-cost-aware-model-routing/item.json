@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "id": "004-cost-aware-model-routing",
+  "title": "Cost-aware model routing",
+  "section": "optimization",
+  "state": "idea",
+  "overview": "Implement model selection strategy where the orchestrator picks cheap models for simple subtasks and expensive models for complex ones. Define a CostTracker monitoring token usage and monetary cost. Include a ModelRegistry with 3+ tiers.",
+  "branch": null,
+  "pr_url": null,
+  "pr_number": null,
+  "last_error": null,
+  "created_at": "2026-02-04T05:20:00.000Z",
+  "updated_at": "2026-02-04T05:20:00.000Z",
+  "problem_statement": "Using expensive models for every subtask wastes money. Need intelligent model selection based on task complexity.",
+  "motivation": "Enables Pareto-efficient cost-performance trade-offs, a key contribution of the AOrchestra paper.",
+  "success_criteria": [
+    "ModelRegistry with 3+ model tiers (flash, standard, premium)",
+    "CostTracker monitoring token usage and estimated cost per delegation",
+    "Lambda parameter controlling cost-performance trade-off",
+    "Orchestrator uses complexity heuristics for model selection"
+  ],
+  "technical_constraints": [
+    "Depends on items 001 and 002",
+    "All models must be accessible via Z.ai API",
+    "Cost estimates based on token counts"
+  ]
+}

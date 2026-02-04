@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "id": "002-orchestrator-delegate-finish",
+  "title": "Orchestrator with Delegate and Finish",
+  "section": "core",
+  "state": "idea",
+  "overview": "Build the central Orchestrator class that never executes environment actions directly. It has exactly two system actions: Delegate(Phi) which spawns a sub-agent from a 4-tuple and collects its observation, and Finish(y) which terminates with a final answer. The orchestrator maintains a state history of all delegations and observations. It uses an LLM to decide at each step whether to Delegate (and with what tuple) or Finish.",
+  "branch": null,
+  "pr_url": null,
+  "pr_number": null,
+  "last_error": null,
+  "created_at": "2026-02-04T05:20:00.000Z",
+  "updated_at": "2026-02-04T05:20:00.000Z",
+  "problem_statement": "Need a central orchestrator that decomposes complex tasks into subtasks and delegates to dynamically-created sub-agents.",
+  "motivation": "The orchestrator is the brain of AOrchestra - it decides what to do and who does it.",
+  "success_criteria": [
+    "Orchestrator class with Delegate(Phi) and Finish(y) actions",
+    "LLM-based decision loop choosing between Delegate and Finish",
+    "State history tracking all delegations and observations",
+    "State transition function integrating returned observations",
+    "Orchestrator never directly executes environment actions"
+  ],
+  "technical_constraints": [
+    "Depends on item 001 (AgentTuple, SubAgent)",
+    "Must support configurable max_steps to prevent infinite loops",
+    "Structured output from LLM for action selection"
+  ]
+}
