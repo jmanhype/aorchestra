@@ -5,7 +5,7 @@
   "merge_mode": "direct",
   "agent": {
     "kind": "rlm",
-    "model": "claude-sonnet-4-20250514",
+    "model": "glm-4.5",
     "max_tokens": 8192
   },
   "max_iterations": 100,
