@@ -7,7 +7,7 @@ name = "aorchestra"
 version = "0.1.0"
 description = "AOrchestra: Open Implementation of Agentic Orchestration"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2.0,<3.0",
     "openai>=1.0,<2.0",
