@@ -1,0 +1,221 @@
+{
+  "schema_version": 1,
+  "id": "001-core-4tuple-agent-abstraction",
+  "branch_name": "wreckit/001-core-4tuple-agent-abstraction",
+  "user_stories": [
+    {
+      "id": "US-001",
+      "title": "Implement AgentTuple dataclass with 4 fields",
+      "acceptance_criteria": [
+        "AgentTuple is a Pydantic dataclass with instruction (str), context (str), tools (list), and model (ModelConfig) fields",
+        "instruction field is required and must not be empty after stripping whitespace",
+        "context field defaults to empty string",
+        "tools field defaults to empty list",
+        "model field is required and must be a ModelConfig instance",
+        "AgentTuple.build_prompt() method returns instruction with optional context appended",
+        "AgentTuple can be serialized to/from JSON using Pydantic methods",
+        "Pydantic validation raises clear errors for invalid configurations",
+        "Unit tests cover all validation rules and edge cases",
+        "Type hints are present for all fields and methods"
+      ],
+      "priority": 1,
+      "status": "pending",
+      "notes": "This is the core 4-tuple abstraction Φ = (Instruction, Context, Tools, Model). Foundation for all other components. Must use Pydantic v2 dataclass for validation and serialization."
+    },
+    {
+      "id": "US-002",
+      "title": "Implement Observation result structure",
+      "acceptance_criteria": [
+        "Observation is a Pydantic BaseModel with result_summary (str), artifacts (dict), and error_logs (list) fields",
+        "result_summary field is required and describes the execution outcome",
+        "artifacts field defaults to empty dict and holds structured outputs",
+        "error_logs field defaults to empty list and captures errors/warnings",
+        "Observation.add_error() method appends messages to error_logs",
+        "Observation.add_artifact() method adds key-value pairs to artifacts",
+        "Observation can be serialized to/from JSON for state persistence",
+        "Unit tests verify all methods and serialization behavior",
+        "Observation supports extensible metadata for future enhancements"
+      ],
+      "priority": 1,
+      "status": "pending",
+      "notes": "Required by item 002 for state history tracking. Must be serializable for persistence between orchestration steps."
+    },
+    {
+      "id": "US-003",
+      "title": "Implement ModelConfig for LLM backend",
+      "acceptance_criteria": [
+        "ModelConfig is a Pydantic dataclass with name, api_base, api_key, temperature, and max_tokens fields",
+        "name field is required (e.g., 'glm-4.7', 'glm-4-flash')",
+        "api_base field is required and must start with http:// or https://",
+        "api_key field defaults to empty string",
+        "temperature field defaults to 0.7 and must be between 0.0 and 2.0",
+        "max_tokens field defaults to 2048 and must be greater than 0",
+        "ModelConfig.to_openai_kwargs() returns dict compatible with OpenAI client initialization",
+        "Pydantic validation ensures api_base is valid URL format",
+        "Unit tests cover all validation rules and edge cases",
+        "ModelConfig is simple enough to be wrapped by ModelRegistry in item 004"
+      ],
+      "priority": 1,
+      "status": "pending",
+      "notes": "Designed to work with Z.ai GLM models via OpenAI-compatible API. Must be extensible for item 004's ModelRegistry with tiers."
+    },
+    {
+      "id": "US-004",
+      "title": "Define Tool protocol interface",
+      "acceptance_criteria": [
+        "Tool is a typing.Protocol with name (str), description (str), and async execute(**kwargs) method",
+        "Protocol uses @runtime_checkable decorator for isinstance() validation",
+        "validate_tool() function checks if object implements Tool protocol",
+        "validate_tool() raises TypeError with clear message if object is not a valid tool",
+        "Tool protocol is flexible (duck typing) - any object with matching signature qualifies",
+        "Mock tools (EchoTool, CalculatorTool, ErrorTool) demonstrate the interface",
+        "Unit tests verify protocol validation catches invalid tools",
+        "Tool interface accommodates item 003's requirement for 'name, description, execute' pattern",
+        "Tool protocol documentation explains how to create custom tools"
+      ],
+      "priority": 1,
+      "status": "pending",
+      "notes": "Uses Protocol (not base class) for maximum flexibility. Must work with item 003's ToolRegistry and diverse tool implementations."
+    },
+    {
+      "id": "US-005",
+      "title": "Implement mock tools for testing",
+      "acceptance_criteria": [
+        "EchoTool has name='echo', description, and async execute(message) that returns echoed message",
+        "CalculatorTool has name='calculator', description, and async execute(operation, a, b) that performs arithmetic",
+        "CalculatorTool supports add, subtract, multiply, divide operations",
+        "CalculatorTool raises ValueError for division by zero and unknown operations",
+        "ErrorTool has name='error_tool' and async execute() that always raises RuntimeError",
+        "All mock tools implement Tool protocol and pass validate_tool() check",
+        "Unit tests verify each mock tool executes correctly in async context",
+        "ErrorTool tests verify errors are properly raised"
+      ],
+      "priority": 1,
+      "status": "pending",
+      "notes": "Mock tools enable testing SubAgent without real LLM calls. Item 003 will replace these with real tools (calculator, code_execute, web_search_mock, file_read)."
+    },
+    {
+      "id": "US-006",
+      "title": "Implement SubAgent base class with async execute()",
+      "acceptance_criteria": [
+        "SubAgent is initialized with an AgentTuple",
+        "SubAgent has async execute() method that returns an Observation",
+        "execute() builds prompt from tuple.instruction and tuple.context using build_prompt()",
+        "execute() creates AsyncOpenAI client from tuple.model configuration",
+        "execute() calls LLM with prompt and available tools",
+        "execute() processes tool_calls if present in LLM response",
+        "execute() invokes tools using async execute(**kwargs) method",
+        "execute() captures tool execution results in artifacts",
+        "execute() captures all errors in error_logs and returns partial results",
+        "execute() never propagates exceptions - always returns Observation",
+        "SubAgent only accesses its assigned context and tools (isolation guarantee)",
+        "_prepare_tools() converts tool objects to OpenAI function-calling format",
+        "_find_tool(name) locates tool by name in tuple.tools",
+        "Unit tests use mocked OpenAI client to verify execution flow",
+        "Tests verify tool invocation, error handling, and isolation"
+      ],
+      "priority": 2,
+      "status": "pending",
+      "notes": "Core execution engine. Must be async for concurrent sub-agent operation. Isolation is critical - each SubAgent must only access its assigned context/tools."
+    },
+    {
+      "id": "US-007",
+      "title": "Implement AgentFactory for sub-agent creation",
+      "acceptance_criteria": [
+        "AgentFactory has create(tuple_def) method that returns SubAgent instance",
+        "create() validates tuple_def before creating SubAgent",
+        "Validation checks instruction is not empty after stripping whitespace",
+        "Validation checks all tools implement Tool protocol using validate_tool()",
+        "Validation checks model.name and model.api_base are not empty",
+        "create() raises ValueError for invalid tuple configurations",
+        "create() raises TypeError for invalid tools with clear error messages",
+        "AgentFactory has async create_and_execute() convenience method",
+        "create_and_execute() creates agent and awaits execute() in one call",
+        "Unit tests verify validation catches all invalid configurations",
+        "Unit tests verify factory creates valid SubAgent instances",
+        "Factory is ready for integration with item 002's Orchestrator"
+      ],
+      "priority": 2,
+      "status": "pending",
+      "notes": "Provides clean interface for Orchestrator (item 002) to spawn sub-agents. Validation ensures bad configurations fail early with clear errors."
+    },
+    {
+      "id": "US-008",
+      "title": "Create project structure and configuration",
+      "acceptance_criteria": [
+        "pyproject.toml defines project metadata and dependencies (pydantic>=2.0, openai>=1.0)",
+        "requirements.txt pins exact dependency versions for reproducibility",
+        "pytest.ini configures asyncio_mode='auto' and test paths",
+        "aorchestra/ package directory exists with __init__.py",
+        "aorchestra/core/ module contains tuples, agents, factory, observations",
+        "aorchestra/tools/ module contains base protocol and mock tools",
+        "aorchestra/models/ module contains config classes",
+        "tests/ directory exists with test files for each module",
+        "Package exports AgentTuple, SubAgent, AgentFactory, Observation from top-level __init__.py",
+        "pip install -e . installs the package successfully",
+        "All imports work: from aorchestra import AgentTuple, SubAgent, AgentFactory, Observation"
+      ],
+      "priority": 1,
+      "status": "pending",
+      "notes": "Greenfield project - must establish package structure from scratch. Follow Python packaging best practices with pyproject.toml."
+    },
+    {
+      "id": "US-009",
+      "title": "Write comprehensive unit tests",
+      "acceptance_criteria": [
+        "tests/test_tuples.py tests AgentTuple validation, prompt building, and serialization",
+        "tests/test_models.py tests ModelConfig validation and to_openai_kwargs()",
+        "tests/test_observations.py tests Observation methods and serialization",
+        "tests/test_tools.py tests Tool protocol validation and mock tools",
+        "tests/test_agents.py tests SubAgent execution with mocked LLM",
+        "tests/test_factory.py tests AgentFactory validation and creation",
+        "All tests use pytest-asyncio for async test support",
+        "Tests use unittest.mock for mocking OpenAI client",
+        "Test coverage is ≥80% for all modules",
+        "pytest tests/ runs successfully with all tests passing",
+        "Tests verify edge cases (empty strings, None values, out-of-range numbers)",
+        "Tests verify error handling (invalid tools, LLM failures, tool failures)"
+      ],
+      "priority": 2,
+      "status": "pending",
+      "notes": "Test-driven development approach. Tests must be comprehensive as downstream items (002-005) depend on this foundation."
+    },
+    {
+      "id": "US-010",
+      "title": "Create example scripts demonstrating usage",
+      "acceptance_criteria": [
+        "examples/basic_agent.py demonstrates creating AgentTuple and using AgentFactory",
+        "examples/basic_agent.py shows the 4-tuple structure and Observation result",
+        "examples/with_tools.py demonstrates sub-agent with multiple tools",
+        "examples/with_tools.py shows direct tool execution for testing",
+        "Example scripts run without errors: python examples/basic_agent.py",
+        "Example scripts include clear comments explaining the 4-tuple abstraction",
+        ".env.example template shows ZAI_API_KEY and ZAI_API_BASE configuration",
+        "aorchestra/config.py loads configuration from environment variables using python-dotenv",
+        "Documentation (docs/001-api-reference.md) explains API usage",
+        "Examples are ready for integration with item 002's Orchestrator"
+      ],
+      "priority": 3,
+      "status": "pending",
+      "notes": "Examples should work without real API calls (use mocks). Real Z.ai integration can be tested optionally with valid credentials."
+    },
+    {
+      "id": "US-011",
+      "title": "Verify Z.ai API integration (optional)",
+      "acceptance_criteria": [
+        "OpenAI SDK (openai>=1.0) is used with custom base_url for Z.ai endpoint",
+        "AsyncOpenAI client is configured with api_key and base_url from ModelConfig",
+        "LLM calls use model.name, temperature, and max_tokens from tuple.model",
+        "Tool calling works if GLM-4.7 supports OpenAI function-calling format",
+        "Fallback to manual tool invocation if native tool calling not supported",
+        "Example shows how to configure Z.ai API with environment variables",
+        "Documentation explains Z.ai API configuration and any limitations",
+        "Integration is tested with real API (optional, requires credentials)",
+        "Mock tests ensure code works without real API access"
+      ],
+      "priority": 4,
+      "status": "pending",
+      "notes": "Z.ai claims OpenAI-compatible API. Must verify tool calling support. Implement fallback if needed. Mock tests allow development without API access."
+    }
+  ]
+}
