@@ -7,13 +7,14 @@ from pydantic import BaseModel, Field
 
 from aorchestra.core.tuples import AgentTuple
 from aorchestra.core.observations import Observation
+from aorchestra.models.cost import CostRecord
 
 
 class Delegation(BaseModel):
     """Record of a single delegation step.
 
     Tracks the tuple used to create a sub-agent, the observation
-    returned from execution, and metadata (step number, timestamp).
+    returned from execution, cost information, and metadata (step number, timestamp).
     """
 
     step: int = Field(
@@ -29,6 +30,10 @@ class Delegation(BaseModel):
         ...,
         description="Observation returned from sub-agent execution",
     )
+    cost_record: CostRecord = Field(
+        ...,
+        description="Cost record for this delegation (token usage and estimated cost)",
+    )
     timestamp: str = Field(
         default_factory=lambda: datetime.utcnow().isoformat(),
         description="ISO timestamp of when the delegation completed",
@@ -39,7 +44,7 @@ class OrchestratorState(BaseModel):
     """State of the orchestrator's execution.
 
     Tracks the current goal, step count, delegation history,
-    and execution constraints.
+    execution constraints, and total cost.
     """
 
     goal: str = Field(
@@ -64,6 +69,11 @@ class OrchestratorState(BaseModel):
         default=None,
         description="Current best answer (accumulated from observations)",
     )
+    total_cost_usd: float = Field(
+        default=0.0,
+        description="Total estimated cost in USD across all delegations",
+        ge=0.0,
+    )
 
     @property
     def is_finished(self) -> bool:
@@ -71,6 +81,39 @@ class OrchestratorState(BaseModel):
         return self.step >= self.max_steps
 
     def add_delegation(self, delegation: Delegation) -> None:
-        """Add a delegation to history and increment step."""
+        """Add a delegation to history, increment step, and update total cost."""
         self.history.append(delegation)
         self.step += 1
+        self.total_cost_usd += delegation.cost_record.estimated_cost_usd
+
+    def get_cost_summary(self) -> dict:
+        """Get cost summary across all delegations.
+
+        Returns:
+            Dict with total_cost_usd, total_tokens, delegation_count, model_breakdown
+        """
+        model_breakdown: dict[str, dict[str, float | int]] = {}
+        total_tokens = 0
+
+        for delegation in self.history:
+            record = delegation.cost_record
+            model_name = record.model_name
+            total_tokens += record.total_tokens
+
+            if model_name not in model_breakdown:
+                model_breakdown[model_name] = {
+                    "cost_usd": 0.0,
+                    "tokens": 0,
+                    "calls": 0,
+                }
+
+            model_breakdown[model_name]["cost_usd"] += record.estimated_cost_usd
+            model_breakdown[model_name]["tokens"] += record.total_tokens
+            model_breakdown[model_name]["calls"] += 1
+
+        return {
+            "total_cost_usd": self.total_cost_usd,
+            "total_tokens": total_tokens,
+            "delegation_count": len(self.history),
+            "model_breakdown": model_breakdown,
+        }

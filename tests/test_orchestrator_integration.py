@@ -9,6 +9,18 @@ from aorchestra.core.observations import Observation
 from aorchestra.core.tuples import AgentTuple
 from aorchestra.orchestrator.state import OrchestratorState, Delegation
 from aorchestra.orchestrator.actions import DelegateAction
+from aorchestra.models.cost import CostRecord
+
+
+def _make_cost_record(model_name: str = "gpt-4") -> CostRecord:
+    """Helper to create a cost record."""
+    return CostRecord(
+        model_name=model_name,
+        prompt_tokens=100,
+        completion_tokens=50,
+        total_tokens=150,
+        estimated_cost_usd=0.001,
+    )
 
 
 @pytest.fixture
@@ -67,7 +79,7 @@ class TestOrchestratorToolRegistryIntegration:
 
         tuple_def = AgentTuple(instruction="Calculate something", context="", tools=[], model=model_config)
         obs = Observation(result_summary="Calculated the sum")
-        delegation = Delegation(step=0, tuple=tuple_def, observation=obs)
+        delegation = Delegation(step=0, tuple=tuple_def, observation=obs, cost_record=_make_cost_record())
         orch.state.add_delegation(delegation)
 
         tools = orch._filter_tools([])
@@ -86,7 +98,7 @@ class TestOrchestratorToolRegistryIntegration:
         for i in range(5):
             tuple_def = AgentTuple(instruction=f"Task {i}", context="", tools=[], model=model_config)
             obs = Observation(result_summary=f"Result {i}")
-            delegation = Delegation(step=i, tuple=tuple_def, observation=obs)
+            delegation = Delegation(step=i, tuple=tuple_def, observation=obs, cost_record=_make_cost_record())
             orch.state.add_delegation(delegation)
 
         action = DelegateAction(instruction="New task", context="Some context", tools=[], reasoning="test")
@@ -134,7 +146,7 @@ class TestOrchestratorEndToEnd:
         for i, (instruction, result) in enumerate(history_items):
             tuple_def = AgentTuple(instruction=instruction, context="", tools=[], model=model_config)
             obs = Observation(result_summary=result)
-            delegation = Delegation(step=i, tuple=tuple_def, observation=obs)
+            delegation = Delegation(step=i, tuple=tuple_def, observation=obs, cost_record=_make_cost_record())
             orch.state.add_delegation(delegation)
 
         action = DelegateAction(
@@ -150,7 +162,7 @@ class TestOrchestratorEndToEnd:
 
         tuple_def = AgentTuple(instruction="Calculate the sum", context="", tools=[], model=model_config)
         obs = Observation(result_summary="Sum calculated")
-        orch.state.add_delegation(Delegation(step=0, tuple=tuple_def, observation=obs))
+        orch.state.add_delegation(Delegation(step=0, tuple=tuple_def, observation=obs, cost_record=_make_cost_record()))
 
         tools = orch._filter_tools([])
         assert isinstance(tools, list)

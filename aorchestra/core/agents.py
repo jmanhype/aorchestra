@@ -2,7 +2,7 @@
 
 SubAgent takes an AgentTuple and executes it by:
 1. Building a prompt from instruction + context
-2. Calling the LLM with available tools
+2. Calling LLM with available tools
 3. Returning a structured Observation
 
 Each sub-agent runs in isolation with only its assigned context and tools.
@@ -10,11 +10,12 @@ Each sub-agent runs in isolation with only its assigned context and tools.
 
 import asyncio
 import logging
-from typing import Any
+from typing import Any, Tuple
 from openai import AsyncOpenAI
 
 from aorchestra.core.tuples import AgentTuple
 from aorchestra.core.observations import Observation
+from aorchestra.models.cost import CostRecord
 from aorchestra.tools.base import Tool
 
 logger = logging.getLogger(__name__)
@@ -28,7 +29,7 @@ class SubAgent:
     """
 
     def __init__(self, tuple_def: AgentTuple, client: AsyncOpenAI | None = None):
-        """Initialize the SubAgent with an AgentTuple.
+        """Initialize SubAgent with an AgentTuple.
 
         Args:
             tuple_def: The 4-tuple defining this agent's configuration.
@@ -45,29 +46,39 @@ class SubAgent:
             self._client = AsyncOpenAI(**kwargs)
         return self._client
 
-    async def execute(self) -> Observation:
-        """Execute the sub-agent's task.
+    async def execute(self) -> Tuple[Observation, CostRecord]:
+        """Execute sub-agent's task.
 
-        Builds a prompt from instruction + context, calls the LLM,
+        Builds a prompt from instruction + context, calls LLM,
         invokes tools if needed, and returns a structured Observation.
 
         Returns:
-            Observation with result_summary, artifacts, and error_logs.
+            Tuple of (Observation with result_summary, artifacts, and error_logs,
+                      CostRecord with token usage and estimated cost).
         """
         try:
             return await self._execute_impl()
         except Exception as e:
             logger.exception("SubAgent execution failed")
-            return Observation(
+            observation = Observation(
                 result_summary=f"Execution failed: {e}",
                 error_logs=[f"Critical error: {type(e).__name__}: {e}"],
             )
+            # Return zero cost record on error
+            cost_record = CostRecord(
+                model_name=self.tuple.model.name,
+                prompt_tokens=0,
+                completion_tokens=0,
+                total_tokens=0,
+                estimated_cost_usd=0.0,
+            )
+            return observation, cost_record
 
-    async def _execute_impl(self) -> Observation:
+    async def _execute_impl(self) -> Tuple[Observation, CostRecord]:
         """Internal implementation of execute().
 
         Returns:
-            Observation with execution results.
+            Tuple of (Observation, CostRecord).
         """
         # Build prompt from instruction + context
         prompt = self.tuple.build_prompt()
@@ -78,8 +89,8 @@ class SubAgent:
         artifacts: dict[str, Any] = {}
         error_logs: list[str] = []
 
-        # Call LLM
-        response = await self._call_llm(prompt, tools)
+        # Call LLM and get cost record
+        response, cost_record = await self._call_llm(prompt, tools)
 
         # Process response and invoke tools if needed
         result_summary, tool_artifacts, tool_errors = await self._process_response(
@@ -88,11 +99,12 @@ class SubAgent:
         artifacts.update(tool_artifacts)
         error_logs.extend(tool_errors)
 
-        return Observation(
+        observation = Observation(
             result_summary=result_summary,
             artifacts=artifacts,
             error_logs=error_logs,
         )
+        return observation, cost_record
 
     def _prepare_tools(self) -> list[dict[str, Any]]:
         """Convert tool objects to OpenAI function-calling format.
@@ -118,15 +130,15 @@ class SubAgent:
 
     async def _call_llm(
         self, prompt: str, tools: list[dict[str, Any]]
-    ) -> Any:
-        """Call the LLM with the prompt and tools.
+    ) -> Tuple[Any, CostRecord]:
+        """Call LLM with prompt and tools.
 
         Args:
-            prompt: The prompt to send to the LLM.
+            prompt: The prompt to send to LLM.
             tools: List of tools in OpenAI format.
 
         Returns:
-            LLM response object.
+            Tuple of (LLM response object, CostRecord with token usage).
         """
         kwargs = {
             "model": self.tuple.model.name,
@@ -140,12 +152,42 @@ class SubAgent:
             kwargs["tools"] = tools
 
         response = await self.client.chat.completions.create(**kwargs)
-        return response
+
+        # Extract token usage from response
+        usage = response.usage
+
+        if usage:
+            try:
+                prompt_tokens = getattr(usage, "prompt_tokens", 0)
+                completion_tokens = getattr(usage, "completion_tokens", 0)
+                total_tokens = getattr(usage, "total_tokens", 0)
+            except AttributeError:
+                # Usage object doesn't have expected attributes
+                prompt_tokens = 0
+                completion_tokens = 0
+                total_tokens = 0
+        else:
+            # No usage data available, estimate from prompt length
+            # Rough estimate: 1 token ≈ 4 characters
+            prompt_tokens = len(prompt) // 4
+            completion_tokens = 0
+            total_tokens = prompt_tokens + completion_tokens
+
+        # Create cost record with placeholder cost (recalculated later)
+        cost_record = CostRecord(
+            model_name=self.tuple.model.name,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens,
+            estimated_cost_usd=0.0,  # Placeholder, recalculated later with actual tier rates
+        )
+
+        return response, cost_record
 
     async def _process_response(
         self, response: Any, tool_definitions: list[dict[str, Any]]
     ) -> tuple[str, dict[str, Any], list[str]]:
-        """Process the LLM response and invoke tools if requested.
+        """Process LLM response and invoke tools if requested.
 
         Args:
             response: Raw LLM response.
@@ -169,7 +211,7 @@ class SubAgent:
     async def _handle_tool_calls(
         self, tool_calls: list[Any]
     ) -> tuple[str, dict[str, Any], list[str]]:
-        """Handle tool calls requested by the LLM.
+        """Handle tool calls requested by LLM.
 
         Args:
             tool_calls: List of tool call objects from LLM.
@@ -213,7 +255,7 @@ class SubAgent:
         return result_summary, artifacts, error_logs
 
     def _find_tool(self, name: str) -> Tool | None:
-        """Find a tool by name in the tuple's tool list.
+        """Find a tool by name in tuple's tool list.
 
         Args:
             name: Tool name to find.

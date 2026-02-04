@@ -6,7 +6,19 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from aorchestra.core.orchestrator import Orchestrator
 from aorchestra.core.observations import Observation
 from aorchestra.models.config import ModelConfig
+from aorchestra.models.cost import CostRecord
 from aorchestra.orchestrator.actions import DelegateAction, FinishAction
+
+
+def _make_cost_record(model_name: str = "glm-4.7") -> CostRecord:
+    """Helper to create a cost record."""
+    return CostRecord(
+        model_name=model_name,
+        prompt_tokens=100,
+        completion_tokens=50,
+        total_tokens=150,
+        estimated_cost_usd=0.001,
+    )
 
 
 class TestDelegationFlow:
@@ -39,18 +51,20 @@ class TestDelegationFlow:
             reasoning="Need computation",
         )
 
-        # Mock factory
+        # Mock factory - now returns tuple (Observation, CostRecord)
         mock_observation = Observation(
             result_summary="The answer is 2",
             artifacts={"result": 2},
         )
+        mock_cost_record = _make_cost_record()
 
         with patch.object(
-            orchestrator.factory, "create_and_execute", new=AsyncMock(return_value=mock_observation)
+            orchestrator.factory, "create_and_execute",
+            new=AsyncMock(return_value=(mock_observation, mock_cost_record))
         ) as mock_execute:
-            result = await orchestrator._delegate(action)
+            observation, cost_record = await orchestrator._delegate(action)
 
-            assert result.result_summary == "The answer is 2"
+            assert observation.result_summary == "The answer is 2"
             mock_execute.assert_called_once()
 
             # Verify tuple structure
@@ -73,6 +87,7 @@ class TestDelegationFlow:
                 model=orchestrator.model,
             ),
             observation=Observation(result_summary="Found: X is 42"),
+            cost_record=_make_cost_record(),
         )
         state.add_delegation(delegation)
         orchestrator.state = state
@@ -83,8 +98,10 @@ class TestDelegationFlow:
         )
 
         mock_obs = Observation(result_summary="52")
+        mock_cost = _make_cost_record()
         with patch.object(
-            orchestrator.factory, "create_and_execute", new=AsyncMock(return_value=mock_obs)
+            orchestrator.factory, "create_and_execute",
+            new=AsyncMock(return_value=(mock_obs, mock_cost))
         ) as mock_execute:
             await orchestrator._delegate(action)
 
@@ -107,13 +124,14 @@ class TestDelegationFlow:
 
         # Mock factory to raise exception
         with patch.object(
-            orchestrator.factory, "create_and_execute", new=AsyncMock(side_effect=Exception("API error"))
+            orchestrator.factory, "create_and_execute",
+            new=AsyncMock(side_effect=Exception("API error"))
         ):
-            result = await orchestrator._delegate(action)
+            observation, cost_record = await orchestrator._delegate(action)
 
             # Should return observation with error, not raise
-            assert "Delegation failed" in result.result_summary
-            assert "API error" in result.error_logs[0]
+            assert "Delegation failed" in observation.result_summary
+            assert "API error" in observation.error_logs[0]
 
     @pytest.mark.asyncio
     async def test_filter_tools_returns_matching_tools(self, orchestrator):
@@ -153,6 +171,7 @@ class TestDelegationFlow:
                     model=orchestrator.model,
                 ),
                 observation=Observation(result_summary=f"Result {i}"),
+                cost_record=_make_cost_record(),
             )
             state.add_delegation(delegation)
         orchestrator.state = state

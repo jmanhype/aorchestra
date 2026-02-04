@@ -2,6 +2,7 @@
 
 Item 001: Core orchestrator components
 Item 003: Context curation for intelligent context filtering
+Item 004: Complexity estimation and model selection
 """
 
 from aorchestra.orchestrator.state import OrchestratorState, Delegation
@@ -11,6 +12,10 @@ from aorchestra.orchestrator.context import (
     select_relevant_history,
     build_context_for_subtask,
     extract_keywords_from_instruction,
+)
+from aorchestra.orchestrator.selection import (
+    estimate_complexity,
+    select_model_by_criteria,
 )
 
 __all__ = [
@@ -23,4 +28,7 @@ __all__ = [
     "select_relevant_history",
     "build_context_for_subtask",
     "extract_keywords_from_instruction",
+    # Complexity estimation (Item 004)
+    "estimate_complexity",
+    "select_model_by_criteria",
 ]

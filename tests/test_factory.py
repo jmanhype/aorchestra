@@ -91,13 +91,21 @@ class TestAgentFactory:
     async def test_create_and_execute_convenience_method(self, factory, valid_tuple):
         """create_and_execute() creates agent and executes it."""
         from unittest.mock import AsyncMock, MagicMock, patch
+        from aorchestra.models.cost import CostRecord
 
         # Mock the SubAgent.execute method
         with patch("aorchestra.core.agents.SubAgent.execute") as mock_execute:
             mock_execute = AsyncMock()
             mock_observation = MagicMock()
             mock_observation.result_summary = "Test result"
-            mock_execute.return_value = mock_observation
+            mock_cost_record = CostRecord(
+                model_name="glm-4.7",
+                prompt_tokens=10,
+                completion_tokens=5,
+                total_tokens=15,
+                estimated_cost_usd=0.0005,
+            )
+            mock_execute.return_value = (mock_observation, mock_cost_record)
 
             # Need to patch SubAgent to return our mock
             with patch("aorchestra.core.factory.SubAgent") as MockSubAgent:
@@ -105,6 +113,8 @@ class TestAgentFactory:
                 mock_agent_instance.execute = mock_execute
                 MockSubAgent.return_value = mock_agent_instance
 
-                result = await factory.create_and_execute(valid_tuple)
+                observation, cost_record = await factory.create_and_execute(valid_tuple)
 
-        assert result.result_summary == "Test result"
+        assert observation.result_summary == "Test result"
+        assert isinstance(cost_record, CostRecord)
+        assert cost_record.total_tokens == 15

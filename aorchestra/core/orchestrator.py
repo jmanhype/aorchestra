@@ -10,6 +10,8 @@ from aorchestra.core.factory import AgentFactory
 from aorchestra.core.tuples import AgentTuple
 from aorchestra.core.observations import Observation
 from aorchestra.models.config import ModelConfig
+from aorchestra.models.cost import CostRecord, CostTracker
+from aorchestra.models.registry import ModelRegistry, get_builtin_models
 from aorchestra.orchestrator import prompts, context
 from aorchestra.orchestrator.state import OrchestratorState, Delegation
 from aorchestra.orchestrator.actions import DelegateAction, FinishAction
@@ -29,6 +31,7 @@ class Orchestrator:
     it only performs Delegate and Finish system actions.
 
     Item 003: Enhanced with ToolRegistry and intelligent context curation.
+    Item 004: Enhanced with ModelRegistry and cost-aware model routing.
     """
 
     def __init__(
@@ -36,6 +39,8 @@ class Orchestrator:
         model: ModelConfig,
         factory: Optional[AgentFactory] = None,
         tool_registry: Optional[ToolRegistry] = None,
+        model_registry: Optional[ModelRegistry] = None,
+        lambda_param: float = 0.5,
         max_steps: int = 20,
     ):
         """Initialize the orchestrator.
@@ -45,16 +50,25 @@ class Orchestrator:
             factory: AgentFactory for creating sub-agents. If None, creates default.
             tool_registry: ToolRegistry for managing tools. If None, creates default
                 with built-in tools (Item 003).
+            model_registry: ModelRegistry for model selection (Item 004). If None,
+                creates default with built-in models.
+            lambda_param: Cost-performance trade-off parameter (Item 004). 0.0 = prefer
+                accuracy, 1.0 = prefer cost. Default: 0.5 (balanced).
             max_steps: Maximum number of delegation steps (prevents infinite loops).
         """
         self.model = model
         self.factory = factory or AgentFactory()
         self.max_steps = max_steps
+        self.lambda_param = lambda_param
         self.client = AsyncOpenAI(**model.to_openai_kwargs())
         self.state: Optional[OrchestratorState] = None
 
         # Initialize tool registry (Item 003)
         self.tool_registry = tool_registry or self._create_default_tool_registry()
+
+        # Initialize model registry and cost tracker (Item 004)
+        self.model_registry = model_registry or self._create_default_model_registry()
+        self.cost_tracker = CostTracker()
 
     def _create_default_tool_registry(self) -> ToolRegistry:
         """Create default ToolRegistry with built-in tools.
@@ -69,6 +83,21 @@ class Orchestrator:
             tool = tool_class()
             registry.register(tool, metadata)
             logger.info(f"Registered built-in tool: {tool.name}")
+
+        return registry
+
+    def _create_default_model_registry(self) -> ModelRegistry:
+        """Create default ModelRegistry with built-in models.
+
+        Returns:
+            ModelRegistry with flash, standard, and premium models registered.
+        """
+        registry = ModelRegistry()
+
+        # Register all built-in models
+        for config, tier in get_builtin_models():
+            registry.register(config, tier)
+            logger.info(f"Registered built-in model: {config.name} ({tier.tier})")
 
         return registry
 
@@ -94,14 +123,27 @@ class Orchestrator:
 
             # Execute the action
             if isinstance(action, FinishAction):
-                logger.info(f"Finishing with answer: {action.answer[:50]}...")
+                # Log total cost on finish (Item 004)
+                total_tokens = self.cost_tracker.get_total_tokens()
+                total_cost = self.cost_tracker.get_total_cost()
+                logger.info(
+                    f"Finishing with answer: {action.answer[:50]}... "
+                    f"(total_tokens={total_tokens}, total_cost=${total_cost:.6f})"
+                )
                 return action.answer
 
             # Delegate action
-            observation = await self._delegate(action)
-            self._integrate_observation(action, observation)
+            observation, cost_record = await self._delegate(action)
+            self._integrate_observation(action, observation, cost_record)
 
-        # Max steps reached
+        # Max steps reached - log total cost (Item 004)
+        total_tokens = self.cost_tracker.get_total_tokens()
+        total_cost = self.cost_tracker.get_total_cost()
+        logger.info(
+            f"Max steps reached without finishing "
+            f"(total_tokens={total_tokens}, total_cost=${total_cost:.6f})"
+        )
+
         raise RuntimeError(
             f"Orchestrator reached max_steps ({self.max_steps}) without finishing"
         )
@@ -206,30 +248,58 @@ class Orchestrator:
         else:
             raise ValueError(f"Unknown function: {function_name}")
 
-    async def _delegate(self, action: DelegateAction) -> Observation:
+    async def _delegate(self, action: DelegateAction) -> tuple[Observation, CostRecord]:
         """Delegate a subtask to a sub-agent.
 
         Creates a 4-tuple from the DelegateAction, spawns a sub-agent
-        via AgentFactory, and returns the observation.
+        via AgentFactory, and returns the observation and cost record.
+
+        Item 004: Uses ModelRegistry to select model based on task complexity
+        and tracks token usage and cost.
 
         Args:
             action: The DelegateAction specifying the subtask.
 
         Returns:
-            Observation from the sub-agent execution.
+            Tuple of (Observation, CostRecord) from the sub-agent execution.
         """
+        from aorchestra.models.cost import ModelSelectionCriteria
+        from aorchestra.orchestrator.selection import estimate_complexity
+
         # Build context with relevant history
-        context = self._build_context_for_subagent(action)
+        context_str = self._build_context_for_subagent(action)
 
         # Filter tools (basic implementation for item 002)
         tools = self._filter_tools(action.tools)
 
-        # Build AgentTuple
+        # Estimate complexity for model selection (Item 004)
+        complexity = estimate_complexity(
+            instruction=action.instruction,
+            tools=[t.name for t in tools],
+            context_length=len(context_str),
+        )
+
+        # Select model based on complexity and lambda (Item 004)
+        criteria = ModelSelectionCriteria(
+            complexity=complexity,
+            lambda_param=self.lambda_param,
+        )
+        selected_model = self.model_registry.select_model(criteria)
+
+        # Log model selection
+        tier_info = self.model_registry.get_tier(selected_model.name)
+        tier_name = tier_info.tier if tier_info else "unknown"
+        logger.info(
+            f"Selected model: {selected_model.name} (tier={tier_name}, "
+            f"complexity={complexity:.2f}, lambda={self.lambda_param})"
+        )
+
+        # Build AgentTuple with selected model
         tuple_def = AgentTuple(
             instruction=action.instruction,
-            context=context,
+            context=context_str,
             tools=tools,
-            model=self.model,  # Use same model (item 004 will add ModelRegistry)
+            model=selected_model,  # Item 004: Use selected model
         )
 
         logger.info(
@@ -238,9 +308,23 @@ class Orchestrator:
 
         # Execute via factory
         try:
-            observation = await self.factory.create_and_execute(tuple_def)
+            observation, cost_record = await self.factory.create_and_execute(tuple_def)
+
+            # Recalculate cost with actual model tier rates (Item 004)
+            tier = self.model_registry.get_tier(selected_model.name)
+            if tier:
+                actual_cost = (
+                    (cost_record.prompt_tokens / 1000) * tier.cost_per_1k_input
+                    + (cost_record.completion_tokens / 1000) * tier.cost_per_1k_output
+                )
+                cost_record.estimated_cost_usd = actual_cost
+
+            # Track cost
+            self.cost_tracker.track(cost_record)
+
             logger.info(
-                f"Delegation completed: {observation.result_summary[:50]}..."
+                f"Delegation completed: {observation.result_summary[:50]}... "
+                f"(tokens={cost_record.total_tokens}, cost=${cost_record.estimated_cost_usd:.6f})"
             )
         except Exception as e:
             # Capture unexpected errors
@@ -249,41 +333,74 @@ class Orchestrator:
                 result_summary=f"Delegation failed: {str(e)}",
             )
             observation.add_error(str(e))
+            # Create zero cost record for failed delegation
+            from aorchestra.models.cost import CostRecord
+            cost_record = CostRecord(
+                model_name=selected_model.name,
+                prompt_tokens=0,
+                completion_tokens=0,
+                total_tokens=0,
+                estimated_cost_usd=0.0,
+            )
 
-        return observation
+        return observation, cost_record
 
     def _integrate_observation(
         self,
         action: DelegateAction,
         observation: Observation,
+        cost_record: CostRecord,
     ) -> None:
         """Integrate an observation into the orchestrator state.
 
         Creates a Delegation record and adds it to the history.
 
+        Item 004: Now includes cost_record parameter and tracks costs.
+
         Args:
             action: The DelegateAction that was executed.
             observation: The Observation returned from the sub-agent.
+            cost_record: CostRecord with token usage and estimated cost.
         """
-        # Reconstruct the tuple (we need it for the Delegation record)
+        # Reconstruct the tuple using same model selection logic as _delegate (Item 004)
+        from aorchestra.models.cost import ModelSelectionCriteria
+        from aorchestra.orchestrator.selection import estimate_complexity
+
+        context_str = self._build_context_for_subagent(action)
+
+        # Estimate complexity and select model (same as _delegate)
+        complexity = estimate_complexity(
+            instruction=action.instruction,
+            tools=[],
+            context_length=len(context_str),
+        )
+
+        criteria = ModelSelectionCriteria(
+            complexity=complexity,
+            lambda_param=self.lambda_param,
+        )
+        selected_model = self.model_registry.select_model(criteria)
+
         tuple_def = AgentTuple(
             instruction=action.instruction,
-            context=self._build_context_for_subagent(action),
+            context=context_str,
             tools=[],
-            model=self.model,
+            model=selected_model,  # Item 004: Use selected model
         )
 
         delegation = Delegation(
             step=self.state.step,
             tuple=tuple_def,
             observation=observation,
+            cost_record=cost_record,  # Item 004: Include cost record
         )
 
         self.state.add_delegation(delegation)
 
         logger.debug(
             f"State updated: step={self.state.step}, "
-            f"history_length={len(self.state.history)}"
+            f"history_length={len(self.state.history)}, "
+            f"total_cost=${self.state.total_cost_usd:.6f}"
         )
 
     def _build_context_for_subagent(self, action: DelegateAction) -> str:

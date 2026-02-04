@@ -6,6 +6,7 @@ from aorchestra.core.agents import SubAgent
 from aorchestra.core.tuples import AgentTuple
 from aorchestra.core.observations import Observation
 from aorchestra.models.config import ModelConfig
+from aorchestra.models.cost import CostRecord
 from aorchestra.tools.mock import EchoTool, CalculatorTool
 
 
@@ -51,15 +52,25 @@ class TestSubAgent:
         mock_response.choices[0].message.content = "Hello, world!"
         mock_response.choices[0].message.tool_calls = None
 
+        # Mock usage data
+        mock_usage = MagicMock()
+        mock_usage.prompt_tokens = 10
+        mock_usage.completion_tokens = 5
+        mock_usage.total_tokens = 15
+        mock_response.usage = mock_usage
+
         mock_client = MagicMock()
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
         agent = SubAgent(simple_tuple, client=mock_client)
-        result = await agent.execute()
+        observation, cost_record = await agent.execute()
 
-        assert isinstance(result, Observation)
-        assert result.result_summary == "Hello, world!"
-        assert result.error_logs == []
+        assert isinstance(observation, Observation)
+        assert observation.result_summary == "Hello, world!"
+        assert observation.error_logs == []
+        assert isinstance(cost_record, CostRecord)
+        assert cost_record.prompt_tokens == 10
+        assert cost_record.completion_tokens == 5
 
     @pytest.mark.asyncio
     async def test_execute_with_tools(self, tuple_with_tools):
@@ -75,15 +86,23 @@ class TestSubAgent:
         mock_tool_call.function.arguments = '{"message": "test"}'
         mock_response.choices[0].message.tool_calls = [mock_tool_call]
 
+        # Mock usage data
+        mock_usage = MagicMock()
+        mock_usage.prompt_tokens = 20
+        mock_usage.completion_tokens = 10
+        mock_usage.total_tokens = 30
+        mock_response.usage = mock_usage
+
         mock_client = MagicMock()
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
         agent = SubAgent(tuple_with_tools, client=mock_client)
-        result = await agent.execute()
+        observation, cost_record = await agent.execute()
 
-        assert isinstance(result, Observation)
-        assert "echo" in result.result_summary
-        assert result.artifacts["echo"] == "Echo: test"
+        assert isinstance(observation, Observation)
+        assert "echo" in observation.result_summary
+        assert observation.artifacts["echo"] == "Echo: test"
+        assert isinstance(cost_record, CostRecord)
 
     @pytest.mark.asyncio
     async def test_execute_with_tool_error(self, tuple_with_tools):
@@ -99,15 +118,23 @@ class TestSubAgent:
         mock_tool_call.function.arguments = '{"operation": "divide", "a": 5, "b": 0}'
         mock_response.choices[0].message.tool_calls = [mock_tool_call]
 
+        # Mock usage data
+        mock_usage = MagicMock()
+        mock_usage.prompt_tokens = 20
+        mock_usage.completion_tokens = 10
+        mock_usage.total_tokens = 30
+        mock_response.usage = mock_usage
+
         mock_client = MagicMock()
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
         agent = SubAgent(tuple_with_tools, client=mock_client)
-        result = await agent.execute()
+        observation, cost_record = await agent.execute()
 
-        assert isinstance(result, Observation)
-        assert len(result.error_logs) > 0
-        assert "calculator" in result.error_logs[0]
+        assert isinstance(observation, Observation)
+        assert len(observation.error_logs) > 0
+        assert "calculator" in observation.error_logs[0]
+        assert isinstance(cost_record, CostRecord)
 
     @pytest.mark.asyncio
     async def test_execute_handles_llm_errors(self, simple_tuple):
@@ -118,11 +145,14 @@ class TestSubAgent:
         )
 
         agent = SubAgent(simple_tuple, client=mock_client)
-        result = await agent.execute()
+        observation, cost_record = await agent.execute()
 
-        assert isinstance(result, Observation)
-        assert "Execution failed" in result.result_summary
-        assert len(result.error_logs) > 0
+        assert isinstance(observation, Observation)
+        assert "Execution failed" in observation.result_summary
+        assert len(observation.error_logs) > 0
+        assert isinstance(cost_record, CostRecord)
+        assert cost_record.total_tokens == 0  # Zero cost on error
+        assert cost_record.estimated_cost_usd == 0.0
 
     def test_build_prompt_without_context(self, simple_tuple):
         """Prompt building without context."""

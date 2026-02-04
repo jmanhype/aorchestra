@@ -5,8 +5,11 @@ from 4-tuples. It validates configurations and handles errors.
 """
 
 import logging
+from typing import Tuple
 from aorchestra.core.tuples import AgentTuple
 from aorchestra.core.agents import SubAgent
+from aorchestra.core.observations import Observation
+from aorchestra.models.cost import CostRecord
 from aorchestra.tools.base import validate_tool
 
 logger = logging.getLogger(__name__)
@@ -70,14 +73,16 @@ class AgentFactory:
 
         logger.debug("AgentTuple validation successful")
 
-    async def create_and_execute(self, tuple_def: AgentTuple):
+    async def create_and_execute(
+        self, tuple_def: AgentTuple
+    ) -> Tuple[Observation, CostRecord]:
         """Convenience method to create and execute a SubAgent.
 
         Args:
             tuple_def: The 4-tuple defining the sub-agent.
 
         Returns:
-            Observation from the sub-agent execution.
+            Tuple of (Observation, CostRecord) from the sub-agent execution.
         """
         agent = self.create(tuple_def)
         return await agent.execute()

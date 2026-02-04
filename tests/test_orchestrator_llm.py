@@ -7,7 +7,19 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from aorchestra.core.orchestrator import Orchestrator
 from aorchestra.models.config import ModelConfig
+from aorchestra.models.cost import CostRecord
 from aorchestra.orchestrator.actions import DelegateAction, FinishAction
+
+
+def _make_cost_record(model_name: str = "glm-4.7") -> CostRecord:
+    """Helper to create a cost record."""
+    return CostRecord(
+        model_name=model_name,
+        prompt_tokens=100,
+        completion_tokens=50,
+        total_tokens=150,
+        estimated_cost_usd=0.001,
+    )
 
 
 class TestLLMDecisionMaking:
@@ -102,6 +114,7 @@ class TestLLMDecisionMaking:
                 model=orchestrator.model,
             ),
             observation=Observation(result_summary="Previous result"),
+            cost_record=_make_cost_record(),
         )
         state.add_delegation(delegation)
         orchestrator.state = state
@@ -212,6 +225,7 @@ class TestPromptBuilders:
                 model=ModelConfig(name="glm-4.7", api_base="https://api.z.ai/v1"),
             ),
             observation=Observation(result_summary="Result"),
+            cost_record=_make_cost_record(),
         )
         state.add_delegation(delegation)
 
@@ -240,6 +254,7 @@ class TestPromptBuilders:
                 result_summary="Partial success",
                 error_logs=["API timeout"],
             ),
+            cost_record=_make_cost_record(),
         )
         state.add_delegation(delegation)
 

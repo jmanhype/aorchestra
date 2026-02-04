@@ -1,0 +1,449 @@
+{
+  "schema_version": 1,
+  "id": "004-cost-aware-model-routing",
+  "branch_name": "wreckit/004-cost-aware-model-routing",
+  "user_stories": [
+    {
+      "id": "US-001",
+      "title": "Create CostRecord, ModelTier, and ModelSelectionCriteria Pydantic models",
+      "acceptance_criteria": [
+        "CostRecord model has fields: model_name, prompt_tokens, completion_tokens, total_tokens, estimated_cost_usd, timestamp",
+        "CostRecord.from_openai_usage() class method creates CostRecord from OpenAI response.usage object",
+        "CostRecord.from_openai_usage() correctly calculates estimated cost from tokens and rates",
+        "ModelTier model has fields: name, tier (Literal[flash, standard, premium]), description, cost_per_1k_input, cost_per_1k_output, capabilities",
+        "ModelTier validates cost rates are > 0 using gt constraint",
+        "ModelSelectionCriteria model has fields: complexity (0.0-1.0), lambda_param (0.0-1.0), tier_preference (optional)",
+        "All models use Pydantic Field with descriptions",
+        "All models can be serialized/deserialized to/from JSON",
+        "All models have appropriate field validators (ge, le constraints)"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Foundation for cost tracking. Follow Pydantic patterns from existing code."
+    },
+    {
+      "id": "US-002",
+      "title": "Implement CostTracker class for cost aggregation",
+      "acceptance_criteria": [
+        "CostTracker.__init__() initializes empty records list",
+        "track(record) adds CostRecord to tracking",
+        "get_total_cost() returns sum of all record estimated_cost_usd values",
+        "get_total_tokens() returns sum of all record total_tokens values",
+        "get_delegation_count() returns number of tracked records",
+        "get_summary() returns dict with total_cost_usd, total_tokens, delegation_count, model_breakdown",
+        "model_breakdown in get_summary() includes cost_usd, tokens, calls per model",
+        "reset() clears all cost records",
+        "get_records() returns copy of records (not internal list)",
+        "All methods handle empty tracker gracefully"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Aggregates costs across delegations. Similar pattern to OrchestratorState history tracking."
+    },
+    {
+      "id": "US-003",
+      "title": "Implement ModelRegistry class following ToolRegistry pattern",
+      "acceptance_criteria": [
+        "ModelRegistry.__init__() initializes empty config and tier dicts",
+        "register(config, tier) registers model configuration and tier metadata",
+        "register() raises ValueError if config.name != tier.name",
+        "register() raises ValueError if model already registered",
+        "unregister(name) removes model and tier metadata",
+        "unregister(name) raises KeyError if model not found",
+        "get(name) returns ModelConfig or None if not found",
+        "get_tier(name) returns ModelTier or None if not found",
+        "get_by_tier(tier) returns first ModelConfig at specified tier",
+        "get_by_tier(tier) returns None if no model at that tier",
+        "get_all() returns list of all ModelConfig objects",
+        "list_models() returns list of all model names",
+        "select_model(criteria) selects model based on complexity and lambda_param",
+        "select_model(criteria) uses tier_preference if set, overriding lambda logic",
+        "select_model(criteria) adjusts thresholds based on lambda (0.0-1.0 range)",
+        "select_model(criteria) selects premium for complexity >= premium_threshold",
+        "select_model(criteria) selects flash for complexity <= flash_threshold",
+        "select_model(criteria) selects standard for moderate complexity",
+        "select_model(criteria) falls back to standard if preferred tier unavailable",
+        "select_model(criteria) raises ValueError if no models available",
+        "__len__() returns number of registered models",
+        "__contains__(name) checks if model is registered"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Follow ToolRegistry pattern from item 003. Selection logic with lambda thresholds."
+    },
+    {
+      "id": "US-004",
+      "title": "Create get_builtin_models() helper function",
+      "acceptance_criteria": [
+        "get_builtin_models() returns list of (ModelConfig, ModelTier) tuples",
+        "Returns 3 model configurations: glm-4-flash (flash), glm-4.7 (standard), glm-4-plus (premium)",
+        "Flash tier model has estimated costs (~$0.0001 input, $0.0002 output)",
+        "Standard tier model has estimated costs (~$0.001 input, $0.002 output)",
+        "Premium tier model has estimated costs (~$0.01 input, $0.02 output)",
+        "Each model tier has appropriate capabilities list",
+        "Each model tier has description explaining its use case",
+        "get_builtin_models(cost_rates) accepts optional custom cost_rates dict",
+        "Custom cost_rates override defaults when provided",
+        "All models can be successfully registered in ModelRegistry"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Provides default model tiers. Cost rates are estimates - update with actual Z.ai pricing."
+    },
+    {
+      "id": "US-005",
+      "title": "Implement complexity estimation heuristics",
+      "acceptance_criteria": [
+        "estimate_complexity(instruction, tools, context_length) returns float in [0.0, 1.0]",
+        "Instruction length contributes up to 0.3 to score (normalized to 500 chars)",
+        "Complexity keywords contribute up to 0.3 to score",
+        "COMPLEXITY_KEYWORDS dict maps keywords to weights (analyze=0.3, optimize=0.4, etc.)",
+        "Tool complexity contributes up to 0.3 to score",
+        "COMPLEX_TOOLS dict maps tool names to complexity (code_execute=0.3, web_search=0.2, etc.)",
+        "Context size contributes up to 0.1 to score (normalized to 2000 chars)",
+        "Score is capped at 1.0 (min(score, 1.0))",
+        "Empty instruction returns score 0.0",
+        "No tools and empty context work correctly",
+        "Keyword matching is case-insensitive"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Simple heuristics for complexity estimation. No NLP needed, good enough for cost-aware routing."
+    },
+    {
+      "id": "US-006",
+      "title": "Modify SubAgent to extract token usage from LLM responses",
+      "acceptance_criteria": [
+        "SubAgent._call_llm() extracts usage from response.usage",
+        "response.usage.prompt_tokens is captured as prompt_tokens",
+        "response.usage.completion_tokens is captured as completion_tokens",
+        "response.usage.total_tokens is captured as total_tokens",
+        "CostRecord is created with captured token counts",
+        "CostRecord.estimated_cost_usd is set to 0.0 placeholder (recalculated later)",
+        "If response.usage is None, estimates tokens from prompt length (1 token \u00e2\u2030\u02c6 4 chars)",
+        "_call_llm() returns tuple of (response, CostRecord)",
+        "_execute_impl() receives and returns cost_record",
+        "execute() method returns tuple of (Observation, CostRecord)",
+        "Exception handler returns zero cost record (all tokens = 0, cost = 0.0)",
+        "Token extraction works with both tool calls and simple text responses"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Extract usage data from OpenAI responses. Return tuple for cost tracking."
+    },
+    {
+      "id": "US-007",
+      "title": "Update AgentFactory to handle CostRecord return value",
+      "acceptance_criteria": [
+        "AgentFactory.create_and_execute() returns tuple[Observation, CostRecord]",
+        "create_and_execute() calls agent.execute() and returns result directly",
+        "Return type annotation updated to reflect tuple return",
+        "Existing tests updated to unpack tuple",
+        "No functionality loss in factory operations"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Simple change to pass through tuple return from SubAgent.execute()."
+    },
+    {
+      "id": "US-008",
+      "title": "Add cost_record field to Delegation model",
+      "acceptance_criteria": [
+        "Delegation model has cost_record field of type CostRecord",
+        "cost_record is marked as required field",
+        "Delegation serialization includes cost_record data",
+        "Existing Delegation fields preserved (step, tuple, observation, timestamp)",
+        "Delegation can be created with cost_record parameter"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Add cost tracking to delegation history. Keeps cost with each delegation record."
+    },
+    {
+      "id": "US-009",
+      "title": "Add total_cost tracking to OrchestratorState",
+      "acceptance_criteria": [
+        "OrchestratorState has total_cost_usd field (float, ge=0.0)",
+        "total_cost_usd defaults to 0.0",
+        "add_delegation() increments total_cost_usd by delegation.cost_record.estimated_cost_usd",
+        "get_cost_summary() method returns dict with cost breakdown",
+        "get_cost_summary() includes total_cost_usd, total_tokens, delegation_count, model_breakdown",
+        "model_breakdown shows per-model cost, tokens, and calls",
+        "get_cost_summary() aggregates from all delegation.cost_records"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Track total cost across all delegations. Provides summary for analysis."
+    },
+    {
+      "id": "US-010",
+      "title": "Integrate ModelRegistry into Orchestrator",
+      "acceptance_criteria": [
+        "Orchestrator.__init__() accepts model_registry parameter (optional)",
+        "Orchestrator.__init__() accepts lambda_param parameter (default 0.5)",
+        "Orchestrator.__init__() creates default ModelRegistry with built-in models if not provided",
+        "Orchestrator initializes CostTracker instance",
+        "_create_default_model_registry() registers all built-in models",
+        "Logs each registered model with its tier",
+        "Orchestrator stores model_registry as instance variable",
+        "Orchestrator stores lambda_param as instance variable",
+        "Orchestrator stores cost_tracker as instance variable"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Integrate ModelRegistry into orchestrator initialization. Dependency injection pattern."
+    },
+    {
+      "id": "US-011",
+      "title": "Implement complexity-based model selection in Orchestrator._delegate()",
+      "acceptance_criteria": [
+        "_delegate() calls estimate_complexity() with instruction, tools, and context length",
+        "_delegate() calls model_registry.select_model() with ModelSelectionCriteria",
+        "ModelSelectionCriteria includes complexity from estimate_complexity()",
+        "ModelSelectionCriteria includes lambda_param from self.lambda_param",
+        "_delegate() uses selected model instead of self.model for AgentTuple",
+        "Selected model's tier is logged",
+        "_delegate() recalculates cost with actual model tier rates",
+        "Cost is calculated: (prompt_tokens/1000)*cost_per_1k_input + (completion_tokens/1000)*cost_per_1k_output",
+        "Recalculated cost replaces placeholder cost in CostRecord",
+        "_delegate() tracks cost using cost_tracker.track()",
+        "Token usage and cost are logged in delegation completion message"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Replace hardcoded model selection with dynamic selection based on complexity and lambda."
+    },
+    {
+      "id": "US-012",
+      "title": "Update Orchestrator._integrate_observation() to handle cost_record",
+      "acceptance_criteria": [
+        "_integrate_observation() accepts cost_record parameter",
+        "_integrate_observation() uses same model selection logic as _delegate()",
+        "Delegation is created with cost_record parameter",
+        "Delegation is added to state via state.add_delegation()",
+        "state.add_delegation() updates total_cost_usd automatically",
+        "Updated total_cost_usd is logged"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Pass cost record through to Delegation. State tracks total cost automatically."
+    },
+    {
+      "id": "US-013",
+      "title": "Update Orchestrator.run() to handle cost tracking",
+      "acceptance_criteria": [
+        "run() receives cost_record from _delegate()",
+        "run() passes cost_record to _integrate_observation()",
+        "run() logs total cost when finishing (total_cost_usd and total tokens)",
+        "run() logs total cost when max_steps reached",
+        "CostTracker provides total_tokens for logging"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Wire up cost tracking in main execution loop. Log cost summary on completion."
+    },
+    {
+      "id": "US-014",
+      "title": "Add cost_rates and lambda configuration support",
+      "acceptance_criteria": [
+        "Config dataclass has cost_rates field (dict[str, dict[str, float]])",
+        "Config dataclass has lambda_param field (float)",
+        "Config.from_env() loads COST_RATES from environment variable",
+        "COST_RATES is parsed as JSON (format: {\"model\": {\"input\": X, \"output\": Y}})",
+        "Config.from_env() handles JSON decode errors by using default rates",
+        "Default cost_rates include glm-4-flash, glm-4.7, glm-4-plus",
+        "Config.from_env() loads LAMBDA from environment variable",
+        "LAMBDA is parsed as float",
+        "LAMBDA is clamped to [0.0, 1.0] range using max(0.0, min(1.0, value))",
+        "Invalid LAMBDA defaults to 0.5"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Allow configuration of cost rates and lambda via environment variables."
+    },
+    {
+      "id": "US-015",
+      "title": "Update .env.example with cost-aware configuration",
+      "acceptance_criteria": [
+        ".env.example includes LAMBDA parameter with documentation",
+        ".env.example explains lambda: 0.0 = accuracy, 1.0 = cost",
+        ".env.example includes COST_RATES JSON example",
+        "COST_RATES example includes all 3 models with input/output costs",
+        "COST_RATES example is valid JSON",
+        "Comments explain how to update with actual Z.ai pricing",
+        "Comments reference https://z.ai/pricing for current rates"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Document configuration options. Users need clear examples for cost rates."
+    },
+    {
+      "id": "US-016",
+      "title": "Export new components from package __init__ files",
+      "acceptance_criteria": [
+        "aorchestra/models/__init__.py exports CostRecord, CostTracker, ModelTier, ModelSelectionCriteria",
+        "aorchestra/models/__init__.py exports ModelRegistry, get_builtin_models",
+        "aorchestra/orchestrator/__init__.py exports estimate_complexity, select_model_by_criteria",
+        "aorchestra/__init__.py exports all cost-aware routing components",
+        "aorchestra/__init__.py __all__ list includes all new exports",
+        "Imports work correctly from package level (e.g., from aorchestra import ModelRegistry)",
+        "No circular import errors",
+        "All existing exports preserved"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Expose new public API components. Maintain clean import structure."
+    },
+    {
+      "id": "US-017",
+      "title": "Write unit tests for cost tracking models",
+      "acceptance_criteria": [
+        "TestCostRecord: model creation with all fields, from_openai_usage() with real usage object",
+        "TestCostRecord: from_openai_usage() calculates correct cost, handles missing usage attributes",
+        "TestModelTier: model creation with valid tiers (flash, standard, premium)",
+        "TestModelTier: validation rejects invalid cost rates (<= 0)",
+        "TestModelSelectionCriteria: model creation with complexity in [0, 1] range",
+        "TestModelSelectionCriteria: validation rejects complexity outside [0, 1] range",
+        "TestModelSelectionCriteria: validation rejects lambda outside [0, 1] range",
+        "All models tested for JSON serialization/deserialization",
+        "All edge cases covered (None values, boundary values)"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Comprehensive unit tests for all new Pydantic models."
+    },
+    {
+      "id": "US-018",
+      "title": "Write unit tests for CostTracker",
+      "acceptance_criteria": [
+        "TestCostTracker.track(): adds record correctly, multiple records accumulate",
+        "TestCostTracker.get_total_cost(): sums all costs correctly, empty tracker returns 0.0",
+        "TestCostTracker.get_total_tokens(): sums all tokens correctly, empty tracker returns 0",
+        "TestCostTracker.get_delegation_count(): returns count of records",
+        "TestCostTracker.get_summary(): returns correct dict structure, breakdown per model",
+        "TestCostTracker.get_summary(): model_breakdown has correct cost/tokens/calls per model",
+        "TestCostTracker.reset(): clears all records, subsequent calls return 0",
+        "TestCostTracker.get_records(): returns copy (modifying return doesn't affect tracker)",
+        "All edge cases covered (empty tracker, single record, multiple records, same model multiple times)"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Test cost aggregation and summary generation."
+    },
+    {
+      "id": "US-019",
+      "title": "Write unit tests for ModelRegistry",
+      "acceptance_criteria": [
+        "TestModelRegistry.register(): valid registration, duplicate name raises error, name mismatch raises error",
+        "TestModelRegistry.unregister(): removes model and tier, raises error for nonexistent",
+        "TestModelRegistry.get(): returns config or None, handles nonexistent names",
+        "TestModelRegistry.get_tier(): returns tier or None, handles nonexistent names",
+        "TestModelRegistry.get_by_tier(): returns correct model for each tier, returns None if no model",
+        "TestModelRegistry.get_all(): returns all configs, empty registry returns []",
+        "TestModelRegistry.list_models(): returns all names, empty registry returns []",
+        "TestModelRegistry.select_model(): uses tier_preference when set",
+        "TestModelRegistry.select_model(): uses lambda to adjust thresholds correctly",
+        "TestModelRegistry.select_model(): selects flash for low complexity with high lambda",
+        "TestModelRegistry.select_model(): selects premium for high complexity with low lambda",
+        "TestModelRegistry.select_model(): selects standard for moderate complexity",
+        "TestModelRegistry.select_model(): falls back to standard if preferred tier unavailable",
+        "TestModelRegistry.select_model(): raises ValueError if no models available",
+        "TestModelRegistry.__len__(): returns correct count",
+        "TestModelRegistry.__contains__(): checks membership correctly",
+        "All edge cases covered (empty registry, missing tiers, boundary lambda values)"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Comprehensive tests following ToolRegistry test patterns."
+    },
+    {
+      "id": "US-020",
+      "title": "Write unit tests for complexity estimation",
+      "acceptance_criteria": [
+        "TestEstimateComplexity: empty instruction returns 0.0, empty tools returns 0.0",
+        "TestEstimateComplexity: instruction length contributes correctly (max 0.3 at 500 chars)",
+        "TestEstimateComplexity: keywords contribute correctly (analyze, optimize, reason, etc.)",
+        "TestEstimateComplexity: keyword matching is case-insensitive",
+        "TestEstimateComplexity: tools contribute correctly (code_execute=0.3, web_search=0.2)",
+        "TestEstimateComplexity: context size contributes correctly (max 0.1 at 2000 chars)",
+        "TestEstimateComplexity: all factors combined correctly",
+        "TestEstimateComplexity: score is capped at 1.0",
+        "TestEstimateComplexity: simple task (short, no keywords, no tools) returns low score (< 0.4)",
+        "TestEstimateComplexity: complex task (long, keywords, tools) returns high score (> 0.6)",
+        "All edge cases covered (empty inputs, boundary values, multiple keywords/tools)"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Test complexity heuristics. Verify scores make sense for simple vs complex tasks."
+    },
+    {
+      "id": "US-021",
+      "title": "Update existing tests for tuple returns",
+      "acceptance_criteria": [
+        "tests/test_agents.py: All tests updated to unpack tuple (Observation, CostRecord)",
+        "tests/test_factory.py: All tests updated to handle tuple returns",
+        "tests/test_orchestrator.py: All tests updated to handle cost_record in _integrate_observation",
+        "All tests pass with new tuple return types",
+        "No functionality lost in existing test coverage",
+        "Mock responses include usage attribute with prompt_tokens, completion_tokens, total_tokens"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Update existing tests for breaking changes in SubAgent and AgentFactory return types."
+    },
+    {
+      "id": "US-022",
+      "title": "Write integration tests for cost-aware routing",
+      "acceptance_criteria": [
+        "TestSimpleTaskUsesFlashModel: Simple task with lambda=0.9 selects flash model",
+        "TestComplexTaskUsesPremiumModel: Complex task with lambda=0.1 selects premium model",
+        "TestCostTrackingAcrossDelegations: Costs tracked correctly across multiple delegations",
+        "TestLambdaAffectsModelSelection: Different lambda values affect model selection for same task",
+        "TestComplexityEstimation: Complexity scores make sense for different task types",
+        "TestTotalCostAccumulation: OrchestratorState.total_cost_usd accumulates correctly",
+        "TestCostSummary: get_cost_summary() returns correct breakdown per model",
+        "All tests use mocked LLM responses (no real API calls)",
+        "Mock responses include usage data for token extraction"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "End-to-end tests for cost-aware routing. Verify entire workflow works correctly."
+    },
+    {
+      "id": "US-023",
+      "title": "Create example demonstrating cost-aware routing",
+      "acceptance_criteria": [
+        "examples/cost_aware_routing.py created",
+        "Example shows creating Orchestrator with ModelRegistry",
+        "Example shows creating Orchestrator with different lambda values (0.1, 0.5, 0.9)",
+        "Example demonstrates complexity estimation for simple vs complex tasks",
+        "Example shows model selection based on complexity and lambda",
+        "Example includes clear output showing which model was selected",
+        "Example code is well-documented with comments",
+        "Example runs without errors (with mocked or real API)"
+      ],
+      "priority": 3,
+      "status": "done",
+      "notes": "Provide working example for users. Demonstrate cost-aware routing in action."
+    },
+    {
+      "id": "US-024",
+      "title": "Verify all acceptance criteria from item.json",
+      "acceptance_criteria": [
+        "ModelRegistry with 3+ model tiers (flash, standard, premium) is implemented and tested",
+        "CostTracker monitors token usage and estimated cost per delegation",
+        "Lambda parameter controls cost-performance trade-off (0.0-1.0 range)",
+        "Orchestrator uses complexity heuristics for model selection",
+        "All tests pass (pytest tests/ -v)",
+        "Test coverage > 90% for new modules",
+        "Type checking passes (mypy aorchestra/)",
+        "Linting passes (ruff check aorchestra/)",
+        "No regressions in existing functionality",
+        "Documentation is complete and accurate"
+      ],
+      "priority": 4,
+      "status": "done",
+      "notes": "Final verification. Ensure all item.json requirements are met."
+    }
+  ]
+}

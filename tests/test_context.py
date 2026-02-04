@@ -12,10 +12,21 @@ from aorchestra.orchestrator.state import Delegation
 from aorchestra.core.tuples import AgentTuple
 from aorchestra.core.observations import Observation
 from aorchestra.models.config import ModelConfig
+from aorchestra.models.cost import CostRecord
 
 
 def _make_model():
     return ModelConfig(name="test-model", api_base="http://test")
+
+
+def _make_cost_record():
+    return CostRecord(
+        model_name="test-model",
+        prompt_tokens=100,
+        completion_tokens=50,
+        total_tokens=150,
+        estimated_cost_usd=0.001,
+    )
 
 
 class TestScoreRelevance:
@@ -155,7 +166,8 @@ class TestSelectRelevantHistory:
             instruction=instruction, context="", tools=[], model=model_config,
         )
         observation = Observation(result_summary=summary)
-        return Delegation(step=1, tuple=tuple_def, observation=observation)
+        cost_record = _make_cost_record()
+        return Delegation(step=1, tuple=tuple_def, observation=observation, cost_record=cost_record)
 
     def test_empty_history_returns_empty_list(self):
         selected = select_relevant_history([], ["python"])
@@ -244,7 +256,8 @@ class TestBuildContextForSubtask:
             instruction=instruction, context="", tools=[], model=model_config,
         )
         observation = Observation(result_summary=summary)
-        return Delegation(step=1, tuple=tuple_def, observation=observation)
+        cost_record = _make_cost_record()
+        return Delegation(step=1, tuple=tuple_def, observation=observation, cost_record=cost_record)
 
     def test_empty_inputs_returns_empty_string(self):
         context = build_context_for_subtask("", [], [], 3)

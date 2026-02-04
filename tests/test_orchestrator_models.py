@@ -7,6 +7,18 @@ from aorchestra.orchestrator.actions import DelegateAction, FinishAction
 from aorchestra.core.tuples import AgentTuple
 from aorchestra.core.observations import Observation
 from aorchestra.models.config import ModelConfig
+from aorchestra.models.cost import CostRecord
+
+
+def _make_cost_record(model_name: str = "glm-4.7") -> CostRecord:
+    """Helper to create a cost record."""
+    return CostRecord(
+        model_name=model_name,
+        prompt_tokens=100,
+        completion_tokens=50,
+        total_tokens=150,
+        estimated_cost_usd=0.001,
+    )
 
 
 class TestOrchestratorState:
@@ -46,6 +58,7 @@ class TestOrchestratorState:
                 model=ModelConfig(name="glm-4.7", api_base="https://api.z.ai/v1"),
             ),
             observation=Observation(result_summary="Done"),
+            cost_record=_make_cost_record(),
         )
         state.add_delegation(delegation)
         assert state.step == 1
@@ -143,6 +156,7 @@ class TestDelegation:
             step=0,
             tuple=sample_tuple,
             observation=sample_observation,
+            cost_record=_make_cost_record(),
         )
         assert delegation.step == 0
         assert delegation.tuple == sample_tuple
@@ -155,6 +169,7 @@ class TestDelegation:
             step=0,
             tuple=sample_tuple,
             observation=sample_observation,
+            cost_record=_make_cost_record(),
         )
         json_str = delegation.model_dump_json()
         assert "step" in json_str
@@ -170,6 +185,7 @@ class TestDelegation:
             step=0,
             tuple=sample_tuple,
             observation=obs,
+            cost_record=_make_cost_record(),
         )
         assert len(delegation.observation.error_logs) == 1
         assert "API timeout" in delegation.observation.error_logs[0]
