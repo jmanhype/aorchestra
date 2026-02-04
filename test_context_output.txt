@@ -1,0 +1,68 @@
+============================= test session starts =============================
+platform win32 -- Python 3.11.9, pytest-9.0.2, pluggy-1.6.0 -- C:\Users\strau\AppData\Local\Programs\Python\Python311\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\strau\clawd\aorchestra
+configfile: pytest.ini (WARNING: ignoring pytest config in pyproject.toml!)
+plugins: anyio-4.10.0, asyncio-1.3.0, cov-7.0.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 41 items
+
+tests/test_context.py::TestScoreRelevance::test_no_keywords_returns_zero PASSED [  2%]
+tests/test_context.py::TestScoreRelevance::test_empty_text_returns_zero PASSED [  4%]
+tests/test_context.py::TestScoreRelevance::test_both_empty_returns_zero PASSED [  7%]
+tests/test_context.py::TestScoreRelevance::test_exact_word_match_weight PASSED [  9%]
+tests/test_context.py::TestScoreRelevance::test_partial_match_weight FAILED [ 12%]
+tests/test_context.py::TestScoreRelevance::test_case_insensitive PASSED  [ 14%]
+tests/test_context.py::TestScoreRelevance::test_cumulative_multiple_occurrences PASSED [ 17%]
+tests/test_context.py::TestScoreRelevance::test_cumulative_multiple_keywords PASSED [ 19%]
+tests/test_context.py::TestScoreRelevance::test_exact_and_partial_combined FAILED [ 21%]
+tests/test_context.py::TestScoreRelevance::test_word_boundary_detection PASSED [ 24%]
+tests/test_context.py::TestScoreRelevance::test_no_match_returns_zero PASSED [ 26%]
+tests/test_context.py::TestExtractKeywordsFromInstruction::test_empty_input_returns_empty_list PASSED [ 29%]
+tests/test_context.py::TestExtractKeywordsFromInstruction::test_none_input_returns_empty_list PASSED [ 31%]
+tests/test_context.py::TestExtractKeywordsFromInstruction::test_filters_short_words PASSED [ 34%]
+tests/test_context.py::TestExtractKeywordsFromInstruction::test_filters_common_stopwords PASSED [ 36%]
+tests/test_context.py::TestExtractKeywordsFromInstruction::test_keeps_technical_terms PASSED [ 39%]
+tests/test_context.py::TestExtractKeywordsFromInstruction::test_returns_lowercase PASSED [ 41%]
+tests/test_context.py::TestExtractKeywordsFromInstruction::test_removes_duplicates PASSED [ 43%]
+tests/test_context.py::TestExtractKeywordsFromInstruction::test_regex_pattern_filters_non_word_chars FAILED [ 46%]
+tests/test_context.py::TestExtractKeywordsFromInstruction::test_comprehensive_stopwords_filtering PASSED [ 48%]
+tests/test_context.py::TestExtractKeywordsFromInstruction::test_meaningful_words_kept PASSED [ 51%]
+tests/test_context.py::TestSelectRelevantHistory::test_empty_history_returns_empty_list PASSED [ 53%]
+tests/test_context.py::TestSelectRelevantHistory::test_includes_recent_items FAILED [ 56%]
+tests/test_context.py::TestSelectRelevantHistory::test_scores_by_keyword_relevance PASSED [ 58%]
+tests/test_context.py::TestSelectRelevantHistory::test_respects_max_items_limit PASSED [ 60%]
+tests/test_context.py::TestSelectRelevantHistory::test_include_recent_zero PASSED [ 63%]
+tests/test_context.py::TestSelectRelevantHistory::test_recent_items_plus_scored_items PASSED [ 65%]
+tests/test_context.py::TestSelectRelevantHistory::test_skips_duplicates_in_recent_when_scoring PASSED [ 68%]
+tests/test_context.py::TestSelectRelevantHistory::test_ordering_recent_first_then_scored PASSED [ 70%]
+tests/test_context.py::TestSelectRelevantHistory::test_empty_keywords_returns_items_by_recency PASSED [ 73%]
+tests/test_context.py::TestBuildContextForSubtask::test_empty_inputs_returns_empty_string PASSED [ 75%]
+tests/test_context.py::TestBuildContextForSubtask::test_includes_action_context PASSED [ 78%]
+tests/test_context.py::TestBuildContextForSubtask::test_action_context_only PASSED [ 80%]
+tests/test_context.py::TestBuildContextForSubtask::test_includes_history_with_header FAILED [ 82%]
+tests/test_context.py::TestBuildContextForSubtask::test_uses_select_relevant_history FAILED [ 85%]
+tests/test_context.py::TestBuildContextForSubtask::test_passes_keywords_to_selection FAILED [ 87%]
+tests/test_context.py::TestBuildContextForSubtask::test_respects_max_history_items FAILED [ 90%]
+tests/test_context.py::TestBuildContextForSubtask::test_combines_action_context_and_history FAILED [ 92%]
+tests/test_context.py::TestBuildContextForSubtask::test_formats_observations_as_bullets FAILED [ 95%]
+tests/test_context.py::TestBuildContextForSubtask::test_empty_history_with_action_context PASSED [ 97%]
+tests/test_context.py::TestBuildContextForSubtask::test_no_matching_history_returns_action_context_only FAILED [100%]
+
+=============================== tests coverage ================================
+_______________ coverage: platform win32, python 3.11.9-final-0 _______________
+
+Coverage HTML written to dir htmlcov
+=========================== short test summary info ===========================
+FAILED tests/test_context.py::TestScoreRelevance::test_partial_match_weight
+FAILED tests/test_context.py::TestScoreRelevance::test_exact_and_partial_combined
+FAILED tests/test_context.py::TestExtractKeywordsFromInstruction::test_regex_pattern_filters_non_word_chars
+FAILED tests/test_context.py::TestSelectRelevantHistory::test_includes_recent_items
+FAILED tests/test_context.py::TestBuildContextForSubtask::test_includes_history_with_header
+FAILED tests/test_context.py::TestBuildContextForSubtask::test_uses_select_relevant_history
+FAILED tests/test_context.py::TestBuildContextForSubtask::test_passes_keywords_to_selection
+FAILED tests/test_context.py::TestBuildContextForSubtask::test_respects_max_history_items
+FAILED tests/test_context.py::TestBuildContextForSubtask::test_combines_action_context_and_history
+FAILED tests/test_context.py::TestBuildContextForSubtask::test_formats_observations_as_bullets
+FAILED tests/test_context.py::TestBuildContextForSubtask::test_no_matching_history_returns_action_context_only
+======================== 11 failed, 30 passed in 1.52s ========================

@@ -1,0 +1,359 @@
+{
+  "schema_version": 1,
+  "id": "003-dynamic-context-tool-selection",
+  "branch_name": "wreckit/003-dynamic-context-tool-selection",
+  "user_stories": [
+    {
+      "id": "US-001",
+      "title": "Create ToolMetadata and ToolSelectionCriteria Pydantic models",
+      "acceptance_criteria": [
+        "ToolMetadata model has fields: name, description, tags (list[str]), capabilities (list[str]), requires_sandbox (bool)",
+        "ToolSelectionCriteria model has fields: tags, capabilities, keywords, tool_names, max_tools",
+        "All fields have appropriate defaults (empty lists for lists, False for bool, 10 for max_tools)",
+        "Pydantic validation works correctly for all field types",
+        "Models can be serialized/deserialized to/from JSON"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Foundation for tool registry. Follow Pydantic patterns from existing code."
+    },
+    {
+      "id": "US-002",
+      "title": "Implement ToolRegistry class with core operations",
+      "acceptance_criteria": [
+        "ToolRegistry can be instantiated without arguments",
+        "register(tool, metadata) validates tool implements Tool protocol",
+        "register(tool, metadata) validates tool.name == metadata.name",
+        "register(tool, metadata) raises ValueError for duplicate tool names",
+        "get(name) returns tool or None if not found",
+        "get_metadata(name) returns metadata or None if not found",
+        "get_all() returns list of all registered tools",
+        "list_tools() returns list of all tool names",
+        "unregister(name) removes tool and raises KeyError if not found",
+        "__len__() returns number of registered tools",
+        "__contains__(name) checks if tool is registered"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Core registry functionality. Must integrate with existing validate_tool() from tools/base.py."
+    },
+    {
+      "id": "US-003",
+      "title": "Implement ToolRegistry.select_tools() with filtering logic",
+      "acceptance_criteria": [
+        "If tool_names specified, returns only those tools (ignoring other criteria)",
+        "If tags specified, matches tools with any of the tags (OR logic)",
+        "If capabilities specified, matches tools with any of the capabilities (OR logic)",
+        "If keywords specified, matches tools with keywords in description (case-insensitive)",
+        "Respects max_tools limit on returned results",
+        "Returns empty list if no tools match criteria",
+        "All filters can be used together (AND logic between filter groups)"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Intelligent selection logic. Test with various filter combinations."
+    },
+    {
+      "id": "US-004",
+      "title": "Create CalculatorTool with metadata (enhance existing)",
+      "acceptance_criteria": [
+        "Implements Tool protocol (name, description, async execute)",
+        "Supports operations: add, subtract, multiply, divide",
+        "Raises ValueError for divide by zero",
+        "Raises ValueError for unknown operations",
+        "Has ToolMetadata with tags=['math', 'calculation', 'arithmetic']",
+        "Has ToolMetadata with capabilities=['add', 'subtract', 'multiply', 'divide']",
+        "Passes validate_tool() check",
+        "Async execute returns correct float results"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Enhance existing CalculatorTool from mock.py. Keep existing implementation, add metadata."
+    },
+    {
+      "id": "US-005",
+      "title": "Create CodeExecuteTool with sandboxed execution",
+      "acceptance_criteria": [
+        "Implements Tool protocol (name, description, async execute)",
+        "Executes Python code in subprocess with configurable timeout (default 10s)",
+        "Returns dict with keys: success (bool), stdout (str), stderr (str), returncode (int)",
+        "Raises TimeoutError if execution exceeds timeout and kills process",
+        "Restricts environment variables (removes PYTHONPATH)",
+        "Handles FileNotFoundError if Python interpreter not found",
+        "Captures both stdout and stderr correctly",
+        "Handles code syntax errors gracefully (success=False, stderr populated)"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Use subprocess with timeout for isolation. Not full container sandbox but basic safety."
+    },
+    {
+      "id": "US-006",
+      "title": "Create WebSearchMockTool with predefined results",
+      "acceptance_criteria": [
+        "Implements Tool protocol (name, description, async execute)",
+        "Takes query and max_results parameters (max_results default 5)",
+        "Returns dict with keys: query (str), results (list), total (int)",
+        "Default search index has entries for 'python', 'async', 'machine learning'",
+        "Matches results based on keywords in query (case-insensitive)",
+        "Removes duplicate results by URL",
+        "Returns empty results if no keywords match",
+        "Supports custom search_index via __init__",
+        "Each result has title, url, and snippet fields"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Mock tool for testing. No real API calls. Use realistic predefined data."
+    },
+    {
+      "id": "US-007",
+      "title": "Create FileReadTool with path validation",
+      "acceptance_criteria": [
+        "Implements Tool protocol (name, description, async execute)",
+        "Takes path and encoding parameters (encoding default 'utf-8')",
+        "Returns dict with keys: success (bool), content (str), path (str), size (int), error (str|None)",
+        "Validates file exists, raises FileNotFoundError if not",
+        "Validates file is readable, raises PermissionError if not",
+        "Validates path is within allowed directories (default: current working directory)",
+        "Prevents directory traversal attacks",
+        "Supports custom allowed_dirs via __init__",
+        "Handles Unicode decode errors with descriptive error message",
+        "Resolves absolute paths correctly"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Security is important. Validate paths thoroughly. Prevent access to sensitive files."
+    },
+    {
+      "id": "US-008",
+      "title": "Create get_builtin_tools_metadata() helper function",
+      "acceptance_criteria": [
+        "Returns list of (ToolMetadata, tool_class) tuples for all 4 built-in tools",
+        "Includes CalculatorTool, CodeExecuteTool, WebSearchMockTool, FileReadTool",
+        "ToolMetadata.name matches tool.name for all tools",
+        "ToolMetadata.description matches tool.description for all tools",
+        "Each tool has appropriate tags and capabilities",
+        "All tools returned can be instantiated and pass validate_tool()"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Helper for registering built-in tools. Used by Orchestrator initialization."
+    },
+    {
+      "id": "US-009",
+      "title": "Implement context.score_relevance() function",
+      "acceptance_criteria": [
+        "Takes text and list of keywords as parameters",
+        "Returns float score (higher = more relevant)",
+        "Returns 0.0 for empty text or empty keywords",
+        "Exact word matches (word boundary) have weight 2.0",
+        "Partial matches (substring) have weight 0.5",
+        "Scoring is case-insensitive",
+        "Multiple occurrences of same keyword are cumulative",
+        "Multiple keywords are cumulative"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Simple scoring algorithm. No complex NLP needed. Weighted matching works well."
+    },
+    {
+      "id": "US-010",
+      "title": "Implement context.extract_keywords_from_instruction() function",
+      "acceptance_criteria": [
+        "Takes instruction string as parameter",
+        "Returns list of keywords (lowercase strings)",
+        "Returns empty list for empty input",
+        "Filters out common stopwords (the, a, an, and, or, but, in, on, at, to, for, of, with, by, from, as, etc.)",
+        "Filters out words shorter than 3 characters",
+        "Keeps technical terms and relevant nouns",
+        "Uses regex to extract words (\\b[a-zA-Z]{3,}\\b)"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Simple keyword extraction. No NLP library needed. Good enough for context curation."
+    },
+    {
+      "id": "US-011",
+      "title": "Implement context.select_relevant_history() function",
+      "acceptance_criteria": [
+        "Takes history list, keywords, max_items, include_recent as parameters",
+        "Returns list of selected Delegation records",
+        "Always includes recent items (include_recent parameter)",
+        "Scores remaining items by keyword relevance using score_relevance()",
+        "Combines recent items + top-scored items",
+        "Respects max_items limit on final result",
+        "Handles empty history (returns empty list)",
+        "Items are ordered: recent first, then by relevance score",
+        "Skips items already in recent list when scoring"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Combine recency with relevance. Recent items always included, others scored."
+    },
+    {
+      "id": "US-012",
+      "title": "Implement context.build_context_for_subtask() function",
+      "acceptance_criteria": [
+        "Takes action_context, history, keywords, max_history_items as parameters",
+        "Returns formatted context string",
+        "Includes action_context if provided",
+        "Adds '**Relevant Previous Work:**' header if history included",
+        "Uses select_relevant_history() to filter history",
+        "Passes keywords and max_history_items to selection",
+        "Formats each observation as bullet point with result_summary",
+        "Returns empty string if no action_context and no history"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Combines action context with relevant history. Use in Orchestrator._build_context_for_subagent()."
+    },
+    {
+      "id": "US-013",
+      "title": "Integrate ToolRegistry into Orchestrator.__init__()",
+      "acceptance_criteria": [
+        "Orchestrator.__init__() accepts optional tool_registry parameter",
+        "If tool_registry is None, creates default ToolRegistry via _create_default_tool_registry()",
+        "Default ToolRegistry registers all 4 built-in tools on creation",
+        "ToolRegistry is stored as self.tool_registry",
+        "Logs each registered tool at INFO level",
+        "Existing Orchestrator tests still pass (backward compatible)"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Dependency injection pattern. Allows custom registries for testing."
+    },
+    {
+      "id": "US-014",
+      "title": "Replace Orchestrator._filter_tools() with ToolRegistry-based implementation",
+      "acceptance_criteria": [
+        "If tool_names list is non-empty, returns those specific tools from registry",
+        "If tool_names includes non-existent tool, logs warning and skips it",
+        "If tool_names is empty, uses intelligent selection based on keywords",
+        "Extracts keywords from most recent history instruction using context.extract_keywords_from_instruction()",
+        "Creates ToolSelectionCriteria with keywords and max_tools=5",
+        "Calls tool_registry.select_tools() with criteria",
+        "Returns list of tool objects (not names)",
+        "Logs selected tools at DEBUG level",
+        "Handles case where state is None (no history for keyword extraction)"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Replace placeholder at line 305. Use registry for both explicit and intelligent selection."
+    },
+    {
+      "id": "US-015",
+      "title": "Enhance Orchestrator._build_context_for_subagent() with context curation",
+      "acceptance_criteria": [
+        "Extracts keywords from action.instruction using context.extract_keywords_from_instruction()",
+        "Calls context.build_context_for_subtask() with action_context, history, keywords, max_history_items=3",
+        "Returns formatted context string with relevant history",
+        "Handles case where state is None (empty history)",
+        "Uses enhanced curation instead of simple 'last 3' approach",
+        "Context includes both action.context and relevant history"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Replace basic implementation at line 263-286. Use new context curation module."
+    },
+    {
+      "id": "US-016",
+      "title": "Write comprehensive unit tests for ToolRegistry",
+      "acceptance_criteria": [
+        "TestToolMetadata class: model creation, defaults, validation",
+        "TestToolRegistry.register(): valid tool, duplicate, name mismatch, protocol violation",
+        "TestToolRegistry.get(), get_metadata(), get_all(), list_tools()",
+        "TestToolRegistry.unregister(): existing tool, non-existent tool",
+        "TestToolRegistry.__len__(), __contains__()",
+        "TestToolRegistry.select_tools(): by names, by tags, by capabilities, by keywords, combined filters, no matches, max_tools limit",
+        "All tests pass with pytest -v",
+        "Edge cases covered: empty registry, None inputs, boundary conditions"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Follow existing test patterns from test_tools.py. Use pytest.mark.asyncio where needed."
+    },
+    {
+      "id": "US-017",
+      "title": "Write comprehensive unit tests for built-in tools",
+      "acceptance_criteria": [
+        "TestCalculatorTool: add, subtract, multiply, divide operations, divide by zero error, unknown operation error",
+        "TestCodeExecuteTool: simple print, arithmetic, syntax error, timeout, stdout/stderr capture, infinite loop handling",
+        "TestWebSearchMockTool: python search, async search, no results, max_results limit, custom search index, duplicate removal",
+        "TestFileReadTool: read file, nonexistent file, path traversal prevention, custom allowed_dirs, encoding handling, permission errors",
+        "Test get_builtin_tools_metadata(): returns 4 tools, metadata validity, all tools pass validate_tool()",
+        "All tests pass with pytest -v",
+        "Async tests use pytest.mark.asyncio"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Test each tool thoroughly including error cases. Use tempfile for FileReadTool tests."
+    },
+    {
+      "id": "US-018",
+      "title": "Write comprehensive unit tests for context curation",
+      "acceptance_criteria": [
+        "TestScoreRelevance: no keywords, empty text, exact word match, partial match, case insensitivity, cumulative scoring, multiple keywords",
+        "TestExtractKeywordsFromInstruction: empty input, stopwords filtering, keeps relevant words, filters short words, technical terms",
+        "TestSelectRelevantHistory: empty history, includes recent items, scores by keywords, respects max_items, include_recent=0",
+        "TestBuildContextForSubtask: empty inputs, includes action context, includes history, filters by keywords, respects max_items",
+        "All tests pass with pytest -v",
+        "Edge cases covered: None inputs, empty lists, boundary conditions"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Mock Delegation records for testing. Verify scoring algorithm correctness."
+    },
+    {
+      "id": "US-019",
+      "title": "Write integration tests for Orchestrator with ToolRegistry",
+      "acceptance_criteria": [
+        "Test Orchestrator initialization creates ToolRegistry",
+        "Test Orchestrator registers 4 built-in tools by default",
+        "Test custom ToolRegistry can be injected via __init__",
+        "Test _filter_tools with tool_names returns specified tools",
+        "Test _filter_tools without names uses intelligent selection",
+        "Test _build_context_for_subagent uses context curation",
+        "Test complete delegation workflow with tool selection",
+        "Test context curation in realistic scenarios",
+        "All tests pass with pytest -v",
+        "Use mock LLM responses for deterministic tests"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Follow test patterns from test_orchestrator.py. Mock LLM for deterministic behavior."
+    },
+    {
+      "id": "US-020",
+      "title": "Verify all existing tests still pass (no regressions)",
+      "acceptance_criteria": [
+        "All tests in tests/test_tools.py pass",
+        "All tests in tests/test_agents.py pass",
+        "All tests in tests/test_orchestrator.py pass",
+        "All tests in tests/test_factory.py pass",
+        "All tests in tests/test_tuples.py pass",
+        "All tests in tests/test_observations.py pass",
+        "All tests in tests/test_orchestrator_delegation.py pass",
+        "All tests in tests/test_orchestrator_llm.py pass",
+        "All tests in tests/test_orchestrator_models.py pass",
+        "No test failures or errors",
+        "No warnings introduced"
+      ],
+      "priority": 3,
+      "status": "done",
+      "notes": "Critical: ensure backward compatibility. Fix any regressions before completion."
+    },
+    {
+      "id": "US-021",
+      "title": "Export new components from modules",
+      "acceptance_criteria": [
+        "aorchestra/tools/__init__.py exports: ToolRegistry, ToolMetadata, ToolSelectionCriteria, CalculatorTool, CodeExecuteTool, WebSearchMockTool, FileReadTool, get_builtin_tools_metadata",
+        "aorchestra/orchestrator/__init__.py exports: score_relevance, select_relevant_history, build_context_for_subtask, extract_keywords_from_instruction",
+        "Imports work correctly from package level",
+        "No import errors or circular dependencies"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Ensure clean public API. Export all components for external use."
+    }
+  ]
+}

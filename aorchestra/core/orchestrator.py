@@ -10,9 +10,10 @@ from aorchestra.core.factory import AgentFactory
 from aorchestra.core.tuples import AgentTuple
 from aorchestra.core.observations import Observation
 from aorchestra.models.config import ModelConfig
-from aorchestra.orchestrator import prompts
+from aorchestra.orchestrator import prompts, context
 from aorchestra.orchestrator.state import OrchestratorState, Delegation
 from aorchestra.orchestrator.actions import DelegateAction, FinishAction
+from aorchestra.tools import ToolRegistry, get_builtin_tools_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -26,12 +27,15 @@ class Orchestrator:
 
     The orchestrator never directly executes environment actions -
     it only performs Delegate and Finish system actions.
+
+    Item 003: Enhanced with ToolRegistry and intelligent context curation.
     """
 
     def __init__(
         self,
         model: ModelConfig,
         factory: Optional[AgentFactory] = None,
+        tool_registry: Optional[ToolRegistry] = None,
         max_steps: int = 20,
     ):
         """Initialize the orchestrator.
@@ -39,6 +43,8 @@ class Orchestrator:
         Args:
             model: Model configuration for the orchestrator's LLM.
             factory: AgentFactory for creating sub-agents. If None, creates default.
+            tool_registry: ToolRegistry for managing tools. If None, creates default
+                with built-in tools (Item 003).
             max_steps: Maximum number of delegation steps (prevents infinite loops).
         """
         self.model = model
@@ -46,6 +52,25 @@ class Orchestrator:
         self.max_steps = max_steps
         self.client = AsyncOpenAI(**model.to_openai_kwargs())
         self.state: Optional[OrchestratorState] = None
+
+        # Initialize tool registry (Item 003)
+        self.tool_registry = tool_registry or self._create_default_tool_registry()
+
+    def _create_default_tool_registry(self) -> ToolRegistry:
+        """Create default ToolRegistry with built-in tools.
+
+        Returns:
+            ToolRegistry with all built-in tools registered.
+        """
+        registry = ToolRegistry()
+
+        # Register all built-in tools
+        for metadata, tool_class in get_builtin_tools_metadata():
+            tool = tool_class()
+            registry.register(tool, metadata)
+            logger.info(f"Registered built-in tool: {tool.name}")
+
+        return registry
 
     async def run(self, goal: str) -> str:
         """Run the orchestrator to complete a goal.
@@ -264,8 +289,9 @@ class Orchestrator:
     def _build_context_for_subagent(self, action: DelegateAction) -> str:
         """Build context string for a sub-agent.
 
-        Includes the action's context plus relevant history.
-        For item 002, include full history. Future items may summarize.
+        Item 003: Enhanced with intelligent context curation.
+        Uses keyword extraction and relevance scoring to select
+        relevant history items.
 
         Args:
             action: The DelegateAction being executed.
@@ -273,41 +299,65 @@ class Orchestrator:
         Returns:
             Formatted context string.
         """
-        parts = []
+        # Extract keywords from instruction for relevance scoring
+        keywords = context.extract_keywords_from_instruction(action.instruction)
 
-        # Add action-specific context
-        if action.context:
-            parts.append(action.context)
-
-        # Add relevant history (last 3 observations for context)
-        if self.state.history:
-            parts.append("\n**Relevant Previous Work:**")
-            recent_history = self.state.history[-3:]  # Last 3 delegations
-            for delegation in recent_history:
-                parts.append(
-                    f"- {delegation.observation.result_summary}"
-                )
-
-        return "\n".join(parts) if parts else ""
+        # Build context using curation logic
+        return context.build_context_for_subtask(
+            action_context=action.context,
+            history=self.state.history if self.state else [],
+            keywords=keywords,
+            max_history_items=3,
+        )
 
     def _filter_tools(self, tool_names: list[str]) -> list:
-        """Filter tools by name.
+        """Filter tools by name or intelligently select based on task.
 
-        For item 002, this is a simple placeholder. Item 003 will add
-        ToolRegistry with intelligent tool selection.
+        Item 003: Uses ToolRegistry for tool selection.
+
+        If LLM specified tool names, returns those tools.
+        Otherwise, uses intelligent selection based on task keywords.
 
         Args:
             tool_names: List of tool names to include.
 
         Returns:
-            List of tool objects (empty list for item 002).
+            List of tool objects.
         """
-        # Placeholder: Item 003 will implement ToolRegistry
-        # For item 002, we don't have a tool registry yet
-        # Return empty list (no tools) or all tools if requested
-        if not tool_names:
-            return []
+        # If LLM specified tool names, get those tools
+        if tool_names:
+            tools = []
+            for name in tool_names:
+                tool = self.tool_registry.get(name)
+                if tool:
+                    tools.append(tool)
+                else:
+                    logger.warning(f"Tool not found in registry: {name}")
+            return tools
 
-        # TODO: Implement tool filtering in item 003
-        logger.debug(f"Tool filtering not yet implemented, requested: {tool_names}")
-        return []
+        # Otherwise, select tools intelligently based on task keywords
+        # Extract keywords from current instruction (if state exists)
+        if self.state and self.state.history:
+            # Use most recent instruction for keyword extraction
+            recent_instruction = self.state.history[-1].tuple.instruction
+            keywords = context.extract_keywords_from_instruction(recent_instruction)
+        else:
+            keywords = []
+
+        # Create selection criteria
+        from aorchestra.tools import ToolSelectionCriteria
+
+        criteria = ToolSelectionCriteria(
+            keywords=keywords,
+            max_tools=5,  # Limit number of tools for efficiency
+        )
+
+        # Select tools from registry
+        selected = self.tool_registry.select_tools(criteria)
+
+        logger.debug(
+            f"Selected {len(selected)} tools for delegation: "
+            f"{[t.name for t in selected]}"
+        )
+
+        return selected
