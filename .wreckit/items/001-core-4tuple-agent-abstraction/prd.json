@@ -19,8 +19,8 @@
         "Type hints are present for all fields and methods"
       ],
       "priority": 1,
-      "status": "pending",
-      "notes": "This is the core 4-tuple abstraction Φ = (Instruction, Context, Tools, Model). Foundation for all other components. Must use Pydantic v2 dataclass for validation and serialization."
+      "status": "done",
+      "notes": "This is the core 4-tuple abstraction \u00ce\u00a6 = (Instruction, Context, Tools, Model). Foundation for all other components. Must use Pydantic v2 dataclass for validation and serialization."
     },
     {
       "id": "US-002",
@@ -37,7 +37,7 @@
         "Observation supports extensible metadata for future enhancements"
       ],
       "priority": 1,
-      "status": "pending",
+      "status": "done",
       "notes": "Required by item 002 for state history tracking. Must be serializable for persistence between orchestration steps."
     },
     {
@@ -56,7 +56,7 @@
         "ModelConfig is simple enough to be wrapped by ModelRegistry in item 004"
       ],
       "priority": 1,
-      "status": "pending",
+      "status": "done",
       "notes": "Designed to work with Z.ai GLM models via OpenAI-compatible API. Must be extensible for item 004's ModelRegistry with tiers."
     },
     {
@@ -74,7 +74,7 @@
         "Tool protocol documentation explains how to create custom tools"
       ],
       "priority": 1,
-      "status": "pending",
+      "status": "done",
       "notes": "Uses Protocol (not base class) for maximum flexibility. Must work with item 003's ToolRegistry and diverse tool implementations."
     },
     {
@@ -91,7 +91,7 @@
         "ErrorTool tests verify errors are properly raised"
       ],
       "priority": 1,
-      "status": "pending",
+      "status": "done",
       "notes": "Mock tools enable testing SubAgent without real LLM calls. Item 003 will replace these with real tools (calculator, code_execute, web_search_mock, file_read)."
     },
     {
@@ -115,7 +115,7 @@
         "Tests verify tool invocation, error handling, and isolation"
       ],
       "priority": 2,
-      "status": "pending",
+      "status": "done",
       "notes": "Core execution engine. Must be async for concurrent sub-agent operation. Isolation is critical - each SubAgent must only access its assigned context/tools."
     },
     {
@@ -136,7 +136,7 @@
         "Factory is ready for integration with item 002's Orchestrator"
       ],
       "priority": 2,
-      "status": "pending",
+      "status": "done",
       "notes": "Provides clean interface for Orchestrator (item 002) to spawn sub-agents. Validation ensures bad configurations fail early with clear errors."
     },
     {
@@ -156,7 +156,7 @@
         "All imports work: from aorchestra import AgentTuple, SubAgent, AgentFactory, Observation"
       ],
       "priority": 1,
-      "status": "pending",
+      "status": "done",
       "notes": "Greenfield project - must establish package structure from scratch. Follow Python packaging best practices with pyproject.toml."
     },
     {
@@ -171,13 +171,13 @@
         "tests/test_factory.py tests AgentFactory validation and creation",
         "All tests use pytest-asyncio for async test support",
         "Tests use unittest.mock for mocking OpenAI client",
-        "Test coverage is ≥80% for all modules",
+        "Test coverage is \u00e2\u2030\u00a580% for all modules",
         "pytest tests/ runs successfully with all tests passing",
         "Tests verify edge cases (empty strings, None values, out-of-range numbers)",
         "Tests verify error handling (invalid tools, LLM failures, tool failures)"
       ],
       "priority": 2,
-      "status": "pending",
+      "status": "done",
       "notes": "Test-driven development approach. Tests must be comprehensive as downstream items (002-005) depend on this foundation."
     },
     {
@@ -196,7 +196,7 @@
         "Examples are ready for integration with item 002's Orchestrator"
       ],
       "priority": 3,
-      "status": "pending",
+      "status": "done",
       "notes": "Examples should work without real API calls (use mocks). Real Z.ai integration can be tested optionally with valid credentials."
     },
     {
@@ -214,7 +214,7 @@
         "Mock tests ensure code works without real API access"
       ],
       "priority": 4,
-      "status": "pending",
+      "status": "done",
       "notes": "Z.ai claims OpenAI-compatible API. Must verify tool calling support. Implement fallback if needed. Mock tests allow development without API access."
     }
   ]
