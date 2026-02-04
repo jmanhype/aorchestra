@@ -1,0 +1,182 @@
+{
+  "schema_version": 1,
+  "id": "002-orchestrator-delegate-finish",
+  "branch_name": "wreckit/002-orchestrator-delegate-finish",
+  "user_stories": [
+    {
+      "id": "US-001",
+      "title": "Create OrchestratorState and Delegation models",
+      "acceptance_criteria": [
+        "OrchestratorState Pydantic model exists with goal, step, history, max_steps fields",
+        "Delegation Pydantic model exists with step, tuple, observation, timestamp fields",
+        "OrchestratorState.is_finished property returns True when step >= max_steps",
+        "OrchestratorState.add_delegation() method adds to history and increments step",
+        "Models serialize to JSON correctly",
+        "Unit tests pass: tests/test_orchestrator_models.py",
+        "Type checking passes: mypy aorchestra/orchestrator/"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Foundation for orchestrator state management. Follow item 001 Pydantic patterns."
+    },
+    {
+      "id": "US-002",
+      "title": "Create DelegateAction and FinishAction models",
+      "acceptance_criteria": [
+        "DelegateAction Pydantic model exists with instruction, context, tools, reasoning fields",
+        "FinishAction Pydantic model exists with answer, reasoning fields",
+        "All fields have proper descriptions for LLM function calling",
+        "Tools field is list[str] for tool names (item 003 will add filtering)",
+        "Unit tests validate model creation and serialization",
+        "Unit tests pass: tests/test_orchestrator_models.py"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Action models for structured LLM output. Must match function calling schema exactly."
+    },
+    {
+      "id": "US-003",
+      "title": "Create Orchestrator class structure",
+      "acceptance_criteria": [
+        "Orchestrator class exists in aorchestra/core/orchestrator.py",
+        "__init__() accepts model: ModelConfig, factory: AgentFactory (optional), max_steps: int",
+        "run(goal: str) async method initializes state and runs main loop",
+        "Main loop continues while not state.is_finished",
+        "run() returns final answer string from FinishAction",
+        "max_steps constraint raises RuntimeError when exceeded",
+        "State machine structure works with stub _decide_action()",
+        "_delegate() creates AgentTuple and calls factory.create_and_execute()",
+        "_integrate_observation() creates Delegation and adds to state.history",
+        "Unit tests pass: tests/test_orchestrator.py",
+        "Type checking passes: mypy aorchestra/core/orchestrator.py"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Core state machine. Use stub _decide_action() that returns dummy FinishAction for testing."
+    },
+    {
+      "id": "US-004",
+      "title": "Implement LLM-based action selection",
+      "acceptance_criteria": [
+        "_decide_action() calls OpenAI LLM with function calling",
+        "System prompt explains Delegate and Finish actions",
+        "User prompt includes goal and delegation history",
+        "Two functions defined: delegate_subagent and finish_task",
+        "Function parameters match DelegateAction and FinishAction models",
+        "tool_choice forces function calling (not free text)",
+        "LLM response parsed into DelegateAction or FinishAction",
+        "Raises ValueError if LLM doesn't return tool call",
+        "History is included in prompt for context",
+        "Unit tests pass: tests/test_orchestrator_llm.py",
+        "Mock LLM tests verify response parsing for both action types"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Critical decision logic. Use OpenAI function calling (not parsing) for reliability."
+    },
+    {
+      "id": "US-005",
+      "title": "Build context from history for LLM decisions",
+      "acceptance_criteria": [
+        "prompts.build_user_prompt() constructs context from state",
+        "Includes goal, current step, and previous delegations",
+        "Formats each delegation with instruction and result_summary",
+        "Includes error_logs if present in observations",
+        "prompts.build_system_prompt() explains orchestrator role",
+        "System prompt clearly describes Delegate vs Finish criteria",
+        "Unit tests verify history formatting in prompts",
+        "Context is readable and informative"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Good context improves LLM decision quality. Keep concise to avoid token bloat."
+    },
+    {
+      "id": "US-006",
+      "title": "Implement delegation with context building",
+      "acceptance_criteria": [
+        "_build_context_for_subagent() builds context for sub-agent",
+        "Includes action.context if provided",
+        "Includes last 3 observations from history as 'Relevant Previous Work'",
+        "_filter_tools() is placeholder (returns empty list) with TODO for item 003",
+        "_delegate() passes built context to AgentTuple",
+        "AgentTuple uses same model as orchestrator (item 004 will add ModelRegistry)",
+        "Factory exceptions caught and returned as Observation with error_logs",
+        "Integration tests pass: tests/test_orchestrator_delegation.py",
+        "History is correctly passed to sub-agents"
+      ],
+      "priority": 2,
+      "status": "pending",
+      "notes": "Context sharing enables multi-step reasoning. Tool filtering deferred to item 003."
+    },
+    {
+      "id": "US-007",
+      "title": "Implement error handling and recovery",
+      "acceptance_criteria": [
+        "Factory exceptions in _delegate() caught and converted to Observation",
+        "Error messages added to observation.error_logs",
+        "Orchestrator continues after sub-agent failure (doesn't crash)",
+        "Failed delegations still recorded in state.history",
+        "Subsequent LLM decisions can see previous errors",
+        "Tests verify error recovery (sub-agent failure doesn't stop orchestrator)",
+        "Tests verify error logs are captured correctly"
+      ],
+      "priority": 2,
+      "status": "pending",
+      "notes": "Robustness is critical. Errors should inform, not crash, the orchestrator."
+    },
+    {
+      "id": "US-008",
+      "title": "Create end-to-end tests",
+      "acceptance_criteria": [
+        "test_single_delegation_workflow: delegate once then finish",
+        "test_multi_delegation_workflow: multiple delegations then finish",
+        "test_max_steps_termination: verifies RuntimeError when max_steps reached",
+        "test_direct_finish_no_delegation: LLM finishes immediately",
+        "test_delegation_error_doesnt_crash_orchestrator: error recovery test",
+        "All tests use mocked LLM for determinism",
+        "Full workflow tests exercise complete orchestrator logic",
+        "Tests verify state history is tracked correctly",
+        "Tests pass: pytest tests/test_orchestrator_e2e.py -v",
+        "Code coverage > 80% for orchestrator module"
+      ],
+      "priority": 3,
+      "status": "pending",
+      "notes": "Comprehensive testing ensures reliability. Mock LLM for deterministic CI/CD."
+    },
+    {
+      "id": "US-009",
+      "title": "Create integration test with real LLM (optional)",
+      "acceptance_criteria": [
+        "tests/integration/test_with_real_llm.py exists",
+        "Tests marked with pytest.mark.skip if Z_AI_API_KEY not set",
+        "test_simple_delegation_real_llm calls actual LLM API",
+        "test_direct_finish_real_llm verifies LLM can finish without delegating",
+        "Tests can run with: pytest --integration",
+        "Documented that real LLM tests are optional and require credentials"
+      ],
+      "priority": 4,
+      "status": "pending",
+      "notes": "Optional integration test for validation. Not required for CI/CD."
+    },
+    {
+      "id": "US-010",
+      "title": "Verify all success criteria from item.json",
+      "acceptance_criteria": [
+        "Orchestrator class implements Delegate(Φ) and Finish(y) actions",
+        "LLM-based decision loop chooses between Delegate and Finish at each step",
+        "State history tracks all delegations and observations in OrchestratorState",
+        "State transition function (_integrate_observation) integrates observations",
+        "Orchestrator never directly executes environment actions (only Delegate and Finish)",
+        "max_steps constraint prevents infinite loops",
+        "Structured LLM output using OpenAI function calling",
+        "All unit tests pass: pytest tests/ -v -k orchestrator",
+        "Type checking passes: mypy aorchestra/",
+        "Code coverage report generated"
+      ],
+      "priority": 3,
+      "status": "pending",
+      "notes": "Final verification that all requirements are met. Mark complete when done."
+    }
+  ]
+}
