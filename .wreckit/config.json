@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "base_branch": "main",
+  "base_branch": "master",
   "branch_prefix": "wreckit/",
   "merge_mode": "direct",
   "agent": {

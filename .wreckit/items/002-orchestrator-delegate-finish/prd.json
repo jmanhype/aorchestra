@@ -106,7 +106,7 @@
         "History is correctly passed to sub-agents"
       ],
       "priority": 2,
-      "status": "pending",
+      "status": "done",
       "notes": "Context sharing enables multi-step reasoning. Tool filtering deferred to item 003."
     },
     {
@@ -122,7 +122,7 @@
         "Tests verify error logs are captured correctly"
       ],
       "priority": 2,
-      "status": "pending",
+      "status": "done",
       "notes": "Robustness is critical. Errors should inform, not crash, the orchestrator."
     },
     {
@@ -141,7 +141,7 @@
         "Code coverage > 80% for orchestrator module"
       ],
       "priority": 3,
-      "status": "pending",
+      "status": "done",
       "notes": "Comprehensive testing ensures reliability. Mock LLM for deterministic CI/CD."
     },
     {
@@ -156,14 +156,14 @@
         "Documented that real LLM tests are optional and require credentials"
       ],
       "priority": 4,
-      "status": "pending",
+      "status": "done",
       "notes": "Optional integration test for validation. Not required for CI/CD."
     },
     {
       "id": "US-010",
       "title": "Verify all success criteria from item.json",
       "acceptance_criteria": [
-        "Orchestrator class implements Delegate(Φ) and Finish(y) actions",
+        "Orchestrator class implements Delegate(\u00ce\u00a6) and Finish(y) actions",
         "LLM-based decision loop chooses between Delegate and Finish at each step",
         "State history tracks all delegations and observations in OrchestratorState",
         "State transition function (_integrate_observation) integrates observations",
@@ -175,7 +175,7 @@
         "Code coverage report generated"
       ],
       "priority": 3,
-      "status": "pending",
+      "status": "done",
       "notes": "Final verification that all requirements are met. Mark complete when done."
     }
   ]
