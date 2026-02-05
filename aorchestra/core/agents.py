@@ -43,7 +43,7 @@ class SubAgent:
         """Lazy-initialized OpenAI client."""
         if self._client is None:
             kwargs = self.tuple.model.to_openai_kwargs()
-            self._client = AsyncOpenAI(**kwargs, timeout=60.0)
+            self._client = AsyncOpenAI(**kwargs)
         return self._client
 
     async def execute(self) -> Tuple[Observation, CostRecord]:
