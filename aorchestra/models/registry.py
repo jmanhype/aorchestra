@@ -200,9 +200,13 @@ def get_builtin_models(
     """
     # Default estimated cost rates (in USD per 1K tokens)
     defaults: dict[str, dict[str, float]] = {
-        "glm-4-flash": {"input": 0.0001, "output": 0.0002},
-        "glm-4.7": {"input": 0.001, "output": 0.002},
-        "glm-4-plus": {"input": 0.01, "output": 0.02},
+        # Real Z.ai/Zhipu pricing per 1M tokens (converted to per 1K)
+        # GLM-4-Flash: budget tier
+        "glm-4-flash": {"input": 0.0001, "output": 0.0005},
+        # GLM-4.7: ~$0.10-0.24/1M input, ~$1.74/1M output
+        "glm-4.7": {"input": 0.00024, "output": 0.00174},
+        # GLM-4-Plus: ~$0.70/1M input
+        "glm-4-plus": {"input": 0.0007, "output": 0.0035},
     }
 
     # Use custom rates if provided
