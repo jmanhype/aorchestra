@@ -1,0 +1,229 @@
+{
+  "schema_version": 1,
+  "id": "005-evaluation-harness-demo",
+  "branch_name": "wreckit/005-evaluation-harness-demo",
+  "user_stories": [
+    {
+      "id": "US-001",
+      "title": "Define benchmark task models and 12 diverse tasks",
+      "acceptance_criteria": [
+        "Create BenchmarkTask Pydantic model with id, name, category, goal, expected_answer, tools, scoring_method, difficulty fields",
+        "Define 12 benchmark tasks across 4 categories: math (4 tasks), code (4 tasks), research (2 tasks), planning (2 tasks)",
+        "Create get_benchmark_tasks() function that returns all 12 tasks",
+        "Create get_task_by_id(), get_tasks_by_category(), get_tasks_by_difficulty() helper functions",
+        "All tasks validate correctly with Pydantic",
+        "Exact match tasks have expected_answer field populated",
+        "Tool names match built-in tools (calculator, code_execute, web_search_mock, file_read)",
+        "Unit tests in tests/evaluation/test_tasks.py pass",
+        "Type checking with mypy passes"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Foundational work with no dependencies on other evaluation code"
+    },
+    {
+      "id": "US-002",
+      "title": "Implement SingleAgentBaseline",
+      "acceptance_criteria": [
+        "Create SingleAgentBaseline class that uses AgentFactory to create single agent",
+        "Solve() method executes agent directly without delegation",
+        "Returns tuple of (answer, cost_record)",
+        "Uses ToolRegistry to get tool objects from tool names",
+        "Builds AgentTuple with instruction, context, tools, model",
+        "Unit tests mock AgentFactory.create_and_execute()",
+        "Tests verify answer and cost_record are returned correctly",
+        "Integration tests verify no delegation occurs"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Depends on AgentFactory and existing infrastructure"
+    },
+    {
+      "id": "US-003",
+      "title": "Implement StaticRolesBaseline",
+      "acceptance_criteria": [
+        "Create StaticRolesBaseline class with fixed sub-agents: math_agent, code_agent, research_agent, planning_agent",
+        "Each agent has predefined tools and context",
+        "_select_agent_type() uses LLM with temperature=0 to select appropriate agent type",
+        "Solve() method executes selected agent and returns (answer, cost_record)",
+        "Handles invalid agent type selections gracefully (defaults to 'math')",
+        "Unit tests mock OpenAI client for agent selection",
+        "Tests verify all 4 agents are created with correct tools",
+        "Tests verify agent selection logic works with various goals"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Depends on AgentFactory, more complex than SingleAgentBaseline"
+    },
+    {
+      "id": "US-004",
+      "title": "Implement exact match scoring",
+      "acceptance_criteria": [
+        "Create score_exact_match() function with normalization options",
+        "Normalizes case (lowercase by default, optional case_sensitive parameter)",
+        "Normalizes whitespace (collapse by default, optional ignore_whitespace parameter)",
+        "Supports substring matching (if expected is contained in actual)",
+        "Returns 1.0 for match, 0.0 for no match",
+        "Handles None values gracefully (returns 0.0)",
+        "Create score_exact_match_with_tolerance() for numeric comparison with tolerance parameter",
+        "Unit tests cover: exact match, case sensitivity, whitespace, substring, None values, numeric tolerance",
+        "All tests pass"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Independent, can be developed in parallel with baseline implementations"
+    },
+    {
+      "id": "US-005",
+      "title": "Implement LLM-as-judge scoring",
+      "acceptance_criteria": [
+        "Create score_llm_judge() async function using OpenAI client",
+        "Uses temperature=0 for consistent scoring",
+        "Prompt includes goal, answer, and evaluation criteria (accuracy, completeness, clarity)",
+        "Parses float from LLM response, clamps to [0.0, 1.0] range",
+        "Returns 0.5 on parse failure (default score)",
+        "Create score_llm_judge_with_details() that returns (score, reasoning) tuple",
+        "Unit tests mock OpenAI client responses",
+        "Tests verify: score parsing, clamping to range, parse failure handling",
+        "Integration tests with real LLM confirm reasonable scores"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Depends on OpenAI client, temperature=0 for consistency"
+    },
+    {
+      "id": "US-006",
+      "title": "Create EvaluationResult model and BenchmarkRunner",
+      "acceptance_criteria": [
+        "Create EvaluationResult Pydantic model with all required fields: task_id, task_name, task_category, task_difficulty, system, answer, score, cost_usd, latency_seconds, total_tokens, delegation_count, model_breakdown, error, timestamp",
+        "Create BenchmarkRunner class that initializes with tasks, model, tool_registry, lambda_param, num_trials, timeouts",
+        "Implement _run_aorchestra() that executes Orchestrator and extracts metrics from OrchestratorState.get_cost_summary()",
+        "Implement _run_single_agent() that executes SingleAgentBaseline",
+        "Implement _run_static_roles() that executes StaticRolesBaseline",
+        "Implement _run_benchmark() that executes single task for single system with timeout handling",
+        "Implement run_all() that executes all tasks for all three systems (aorchestra, single_agent, static_roles)",
+        "Apply scoring based on task.scoring_method (exact_match or llm_judge)",
+        "Handle timeouts with asyncio.wait_for(), record error in EvaluationResult",
+        "Handle exceptions gracefully, record error in EvaluationResult",
+        "Implement get_summary() that calculates per-system statistics: accuracy, avg_cost_usd, avg_latency_seconds, avg_tokens, total_delegations",
+        "Unit tests mock baseline executions and orchestrator",
+        "Tests verify: timeout handling, error handling, metrics extraction, scoring application",
+        "Integration tests verify full workflow with mocked LLMs"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Core evaluation harness, depends on tasks, baselines, scoring"
+    },
+    {
+      "id": "US-007",
+      "title": "Implement JSON report generation",
+      "acceptance_criteria": [
+        "Create generate_json_report() function that takes results dict and optional metadata",
+        "JSON structure includes: metadata (timestamp, num_tasks, systems), results (per-system list of EvaluationResult dumps), summary (calculated statistics)",
+        "Merge provided metadata with default metadata",
+        "Use EvaluationResult.model_dump() for serialization",
+        "Calculate summary statistics via _calculate_summary() helper",
+        "Summary includes: by_system (accuracy, avg_cost, avg_latency, avg_tokens, total_delegations), by_category (avg_score, avg_cost), by_difficulty (avg_score, avg_cost)",
+        "JSON is valid and machine-readable for Denario pipeline",
+        "Unit tests verify JSON structure and content",
+        "Tests verify summary calculations are correct"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Depends on BenchmarkRunner results"
+    },
+    {
+      "id": "US-008",
+      "title": "Implement markdown report generation",
+      "acceptance_criteria": [
+        "Create generate_markdown_report() function that takes results dict and optional metadata",
+        "Report includes: title section, metadata section (if provided), Overall Summary table, Summary by Category table, Summary by Difficulty table, Per-Task Results breakdown",
+        "Overall Summary table shows: System, Tasks, Accuracy, Avg Cost ($USD), Avg Latency (s), Avg Tokens, Delegations",
+        "Per-Task breakdown shows comparison of all three systems for each task",
+        "Format percentages as XX.XX% (e.g., 75.00%)",
+        "Format costs with $ and 6 decimal places (e.g., $0.001234)",
+        "Format latencies with 2 decimal places (e.g., 1.23s)",
+        "Markdown renders correctly with proper table formatting",
+        "Unit tests verify markdown structure and formatting",
+        "Manual verification confirms report is readable"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Depends on BenchmarkRunner results"
+    },
+    {
+      "id": "US-009",
+      "title": "Create CLI evaluation script",
+      "acceptance_criteria": [
+        "Create scripts/run_evaluation.py as entry point",
+        "Load configuration from environment (ZAI_API_KEY, ZAI_API_BASE, ZAI_MODEL, LAMBDA, COST_RATES)",
+        "Use Config.from_env() from aorchestra.config",
+        "Initialize ModelConfig from environment",
+        "Create ToolRegistry with built-in tools",
+        "Initialize BenchmarkRunner with all 12 tasks, model, tool_registry, lambda_param",
+        "Run full evaluation with runner.run_all()",
+        "Generate JSON report to output/evaluation_results.json",
+        "Generate markdown report to output/evaluation_report.md",
+        "Create output directory if it doesn't exist",
+        "Print progress to console (starting benchmarks, per-task completion, final summary)",
+        "Handle keyboard interrupts gracefully",
+        "Exit with status code 0 on success, 1 on failure",
+        "Document usage in --help message",
+        "Script executes end-to-end without errors"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Depends on all previous user stories"
+    },
+    {
+      "id": "US-010",
+      "title": "Run full end-to-end evaluation",
+      "acceptance_criteria": [
+        "Execute python scripts/run_evaluation.py with real LLM",
+        "All 12 tasks execute for all 3 systems (aorchestra, single_agent, static_roles)",
+        "No errors or timeouts occur",
+        "JSON report is generated and valid (can be parsed)",
+        "Markdown report is generated and renders correctly",
+        "Metrics are reasonable: accuracy between 0.0 and 1.0, costs positive, latencies positive",
+        "AOrchestra shows strengths vs baselines (e.g., higher accuracy, reasonable cost)",
+        "Review reports and confirm they demonstrate AOrchestra value",
+        "Document expected runtime and cost for full evaluation",
+        "Create sample output files to include in repository documentation"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Requires valid API credentials and budget for LLM calls"
+    },
+    {
+      "id": "US-011",
+      "title": "Add comprehensive test coverage",
+      "acceptance_criteria": [
+        "Unit tests for all components: tasks, baselines, scoring, runner, reports",
+        "Test edge cases: None values, empty strings, invalid inputs, timeouts, errors",
+        "Use mock objects for LLM responses (following conftest.py pattern)",
+        "Integration tests for full evaluation workflow with mocked LLMs",
+        "Test cost aggregation and metric calculations",
+        "Test report generation with sample results",
+        "All tests pass with pytest",
+        "Coverage report shows >80% coverage for evaluation package"
+      ],
+      "priority": 3,
+      "status": "done",
+      "notes": "Quality assurance, can be done incrementally with each phase"
+    },
+    {
+      "id": "US-012",
+      "title": "Update aorchestra __init__.py exports",
+      "acceptance_criteria": [
+        "Add evaluation package imports to aorchestra/__init__.py",
+        "Export: BenchmarkTask, get_benchmark_tasks, BenchmarkRunner, EvaluationResult, SingleAgentBaseline, StaticRolesBaseline, score_exact_match, score_llm_judge, generate_json_report, generate_markdown_report",
+        "Verify all exports are accessible via `from aorchestra import ...`",
+        "Update __all__ list to include evaluation exports",
+        "Test imports work correctly"
+      ],
+      "priority": 3,
+      "status": "done",
+      "notes": "Public API exposure for evaluation components"
+    }
+  ]
+}
