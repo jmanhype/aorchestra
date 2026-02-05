@@ -1,38 +1,38 @@
 # AOrchestra Evaluation Report
 
-Generated: 2026-02-04 20:41:22
+Generated: 2026-02-04 21:14:40
 
 ## Configuration
 - **model:** glm-4.7
 - **api_base:** https://api.z.ai/api/paas/v4/
 - **strategies:** ['single']
 - **num_tasks:** 12
-- **run_date:** 2026-02-04T20:41:22.767657
+- **run_date:** 2026-02-04T21:14:40.097899
 
 ## Results Summary
 
 | Strategy | Avg Score | Total Cost | Total Tokens | Tasks |
 |----------|-----------|------------|--------------|-------|
-| single | 0.0000 | $0.000000 | 5176 | 12 |
+| single | 0.5833 | $0.000000 | 11475 | 12 |
 
 ## Analysis
 
-- **Best accuracy:** single (avg score: 0.0000)
+- **Best accuracy:** single (avg score: 0.5833)
 - **Most cost-effective:** single (total: $0.000000)
 
 ## Detailed Results
 
 ### single
 
-- **Simple Addition:** score=0.0000
-- **Multiplication with Addition:** score=0.0000
-- **Division Chain:** score=0.0000
-- **Complex Arithmetic Chain:** score=0.0000
-- **Hello World Program:** score=0.0000
-- **Sum of Numbers 1 to 100:** score=0.0000
+- **Simple Addition:** score=1.0000
+- **Multiplication with Addition:** score=1.0000
+- **Division Chain:** score=1.0000
+- **Complex Arithmetic Chain:** score=1.0000
+- **Hello World Program:** score=1.0000
+- **Sum of Numbers 1 to 100:** score=1.0000
 - **First 10 Fibonacci Numbers:** score=0.0000
 - **Solve Quadratic Equation:** score=0.0000
 - **Python Programming Information:** score=0.0000
 - **Python Asyncio Information:** score=0.0000
 - **File Content Summary:** score=0.0000
-- **Calculate Rectangle Area:** score=0.0000
+- **Calculate Rectangle Area:** score=1.0000

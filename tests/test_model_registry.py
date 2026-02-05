@@ -535,8 +535,8 @@ class TestGetBuiltinModels:
         assert tier_map["glm-4.7"].cost_per_1k_input == 0.0005
         assert tier_map["glm-4.7"].cost_per_1k_output == 0.001
 
-        # glm-4-plus should keep defaults
-        assert tier_map["glm-4-plus"].cost_per_1k_input > 0.005
+        # glm-4-plus should keep defaults (real Z.ai pricing: ~$0.70/1M = 0.0007/1K)
+        assert tier_map["glm-4-plus"].cost_per_1k_input > 0.0005
 
     def test_models_can_be_registered(self):
         """Test all built-in models can be registered in ModelRegistry."""

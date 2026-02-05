@@ -43,7 +43,7 @@ class SubAgent:
         """Lazy-initialized OpenAI client."""
         if self._client is None:
             kwargs = self.tuple.model.to_openai_kwargs()
-            self._client = AsyncOpenAI(**kwargs)
+            self._client = AsyncOpenAI(**kwargs, timeout=60.0)
         return self._client
 
     async def execute(self) -> Tuple[Observation, CostRecord]:
@@ -75,36 +75,165 @@ class SubAgent:
             return observation, cost_record
 
     async def _execute_impl(self) -> Tuple[Observation, CostRecord]:
-        """Internal implementation of execute().
+        """Internal implementation of execute() with multi-turn tool calling.
+
+        Supports up to MAX_TOOL_ROUNDS of tool call → result → LLM loops.
 
         Returns:
             Tuple of (Observation, CostRecord).
         """
-        # Build prompt from instruction + context
+        MAX_TOOL_ROUNDS = 5
         prompt = self.tuple.build_prompt()
         logger.info(f"Executing sub-agent with prompt: {prompt[:100]}...")
 
-        # Prepare tools for OpenAI function calling (if supported)
         tools = self._prepare_tools()
         artifacts: dict[str, Any] = {}
         error_logs: list[str] = []
 
-        # Call LLM and get cost record
-        response, cost_record = await self._call_llm(prompt, tools)
+        # Build conversation messages
+        messages = [{"role": "user", "content": prompt}]
 
-        # Process response and invoke tools if needed
-        result_summary, tool_artifacts, tool_errors = await self._process_response(
-            response, tools
-        )
-        artifacts.update(tool_artifacts)
-        error_logs.extend(tool_errors)
+        # Accumulate cost across rounds
+        total_prompt_tokens = 0
+        total_completion_tokens = 0
+        total_tokens = 0
 
-        observation = Observation(
-            result_summary=result_summary,
-            artifacts=artifacts,
-            error_logs=error_logs,
+        for round_num in range(MAX_TOOL_ROUNDS):
+            # Call LLM
+            response, round_cost = await self._call_llm_messages(messages, tools)
+            total_prompt_tokens += round_cost.prompt_tokens
+            total_completion_tokens += round_cost.completion_tokens
+            total_tokens += round_cost.total_tokens
+
+            # Check for valid response
+            if not hasattr(response, 'choices') or response.choices is None:
+                # Anthropic-style or failed response
+                content = self._extract_content(response)
+                observation = Observation(
+                    result_summary=content or "No response",
+                    artifacts=artifacts,
+                    error_logs=error_logs,
+                )
+                break
+
+            choice = response.choices[0]
+            message = choice.message
+            tool_calls = getattr(message, "tool_calls", None)
+
+            if not tool_calls:
+                # No more tool calls — we have the final answer
+                observation = Observation(
+                    result_summary=message.content or "",
+                    artifacts=artifacts,
+                    error_logs=error_logs,
+                )
+                break
+
+            # Execute tool calls and build tool result messages
+            # Add assistant message with tool calls
+            assistant_msg = {"role": "assistant", "content": message.content or ""}
+            if tool_calls:
+                assistant_msg["tool_calls"] = [
+                    {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {"name": tc.function.name, "arguments": tc.function.arguments}
+                    }
+                    for tc in tool_calls
+                ]
+            messages.append(assistant_msg)
+
+            # Execute each tool and add result messages
+            for tc in tool_calls:
+                tool_name = tc.function.name
+                tool = self._find_tool(tool_name)
+                if tool is None:
+                    error_logs.append(f"Tool not found: {tool_name}")
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc.id,
+                        "content": f"Error: tool '{tool_name}' not found",
+                    })
+                    continue
+
+                try:
+                    import json
+                    args = json.loads(tc.function.arguments)
+                    logger.info(f"[Round {round_num+1}] Tool call: {tool_name}({args})")
+                    result = await tool.execute(**args)
+                    artifacts[f"{tool_name}_r{round_num+1}"] = result
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc.id,
+                        "content": str(result),
+                    })
+                except Exception as e:
+                    error_msg = f"Tool {tool_name} failed: {e}"
+                    error_logs.append(error_msg)
+                    logger.exception(error_msg)
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc.id,
+                        "content": f"Error: {e}",
+                    })
+        else:
+            # Hit max rounds
+            observation = Observation(
+                result_summary=f"Reached max tool rounds ({MAX_TOOL_ROUNDS}). Last results: {artifacts}",
+                artifacts=artifacts,
+                error_logs=error_logs,
+            )
+
+        cost_record = CostRecord(
+            model_name=self.tuple.model.name,
+            prompt_tokens=total_prompt_tokens,
+            completion_tokens=total_completion_tokens,
+            total_tokens=total_tokens,
+            estimated_cost_usd=0.0,
         )
         return observation, cost_record
+
+    def _extract_content(self, response: Any) -> str:
+        """Extract text content from non-OpenAI response formats."""
+        if hasattr(response, 'content'):
+            if isinstance(response.content, list):
+                return " ".join(getattr(block, 'text', str(block)) for block in response.content)
+            return str(response.content)
+        return ""
+
+    async def _call_llm_messages(
+        self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]
+    ) -> Tuple[Any, CostRecord]:
+        """Call LLM with full message history (for multi-turn)."""
+        kwargs = {
+            "model": self.tuple.model.name,
+            "messages": messages,
+            "temperature": self.tuple.model.temperature,
+            "max_tokens": self.tuple.model.max_tokens,
+        }
+        if tools:
+            kwargs["tools"] = tools
+
+        response = await self.client.chat.completions.create(**kwargs)
+
+        usage = response.usage
+        if usage:
+            prompt_tokens = getattr(usage, "prompt_tokens", 0)
+            completion_tokens = getattr(usage, "completion_tokens", 0)
+            total_tokens = getattr(usage, "total_tokens", 0)
+        else:
+            prompt_tokens = sum(len(str(m.get("content", ""))) // 4 for m in messages)
+            completion_tokens = 0
+            total_tokens = prompt_tokens
+
+        cost_record = CostRecord(
+            model_name=self.tuple.model.name,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens,
+            estimated_cost_usd=0.0,
+        )
+        return response, cost_record
 
     def _prepare_tools(self) -> list[dict[str, Any]]:
         """Convert tool objects to OpenAI function-calling format.

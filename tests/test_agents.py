@@ -74,35 +74,49 @@ class TestSubAgent:
 
     @pytest.mark.asyncio
     async def test_execute_with_tools(self, tuple_with_tools):
-        """Execute with tools that get invoked."""
-        # Mock OpenAI response with tool call
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = None
+        """Execute with tools that get invoked via multi-turn."""
+        # First response: tool call
+        mock_response_1 = MagicMock()
+        mock_response_1.choices = [MagicMock()]
+        mock_response_1.choices[0].message.content = None
 
-        # Create a proper mock tool_call structure
         mock_tool_call = MagicMock()
+        mock_tool_call.id = "call_1"
         mock_tool_call.function.name = "echo"
         mock_tool_call.function.arguments = '{"message": "test"}'
-        mock_response.choices[0].message.tool_calls = [mock_tool_call]
+        mock_response_1.choices[0].message.tool_calls = [mock_tool_call]
 
-        # Mock usage data
-        mock_usage = MagicMock()
-        mock_usage.prompt_tokens = 20
-        mock_usage.completion_tokens = 10
-        mock_usage.total_tokens = 30
-        mock_response.usage = mock_usage
+        mock_usage_1 = MagicMock()
+        mock_usage_1.prompt_tokens = 20
+        mock_usage_1.completion_tokens = 10
+        mock_usage_1.total_tokens = 30
+        mock_response_1.usage = mock_usage_1
+
+        # Second response: final text answer
+        mock_response_2 = MagicMock()
+        mock_response_2.choices = [MagicMock()]
+        mock_response_2.choices[0].message.content = "The echo result is: Echo: test"
+        mock_response_2.choices[0].message.tool_calls = None
+
+        mock_usage_2 = MagicMock()
+        mock_usage_2.prompt_tokens = 30
+        mock_usage_2.completion_tokens = 10
+        mock_usage_2.total_tokens = 40
+        mock_response_2.usage = mock_usage_2
 
         mock_client = MagicMock()
-        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+        mock_client.chat.completions.create = AsyncMock(
+            side_effect=[mock_response_1, mock_response_2]
+        )
 
         agent = SubAgent(tuple_with_tools, client=mock_client)
         observation, cost_record = await agent.execute()
 
         assert isinstance(observation, Observation)
-        assert "echo" in observation.result_summary
-        assert observation.artifacts["echo"] == "Echo: test"
+        assert "echo" in observation.result_summary.lower()
+        assert observation.artifacts["echo_r1"] == "Echo: test"
         assert isinstance(cost_record, CostRecord)
+        assert cost_record.total_tokens == 70  # 30 + 40
 
     @pytest.mark.asyncio
     async def test_execute_with_tool_error(self, tuple_with_tools):

@@ -81,12 +81,15 @@ async def run_strategy(strategy_name: str, model_config: ModelConfig, tasks: lis
         return results
 
     for task in tasks:
-        print(f"  Running task: {task.name}...")
+        print(f"  Running task: {task.name}...", flush=True)
         try:
-            answer, cost_record = await baseline.solve(
-                goal=task.goal,
-                tool_names=task.tools or [],
-                context="",
+            answer, cost_record = await asyncio.wait_for(
+                baseline.solve(
+                    goal=task.goal,
+                    tool_names=task.tools or [],
+                    context="",
+                ),
+                timeout=120,  # 2 min max per task
             )
             # Use substring matching — LLM answers are verbose
             score = score_exact_match(answer or "", task.expected_answer, substring=True)
@@ -101,9 +104,21 @@ async def run_strategy(strategy_name: str, model_config: ModelConfig, tasks: lis
                 "total_tokens": cost_record.total_tokens if cost_record else 0,
             }
             results.append(result)
-            print(f"    Score: {score:.2f} | Cost: ${result['cost_usd']:.6f}")
+            print(f"    Score: {score:.2f} | Cost: ${result['cost_usd']:.6f}", flush=True)
+        except asyncio.TimeoutError:
+            print(f"    TIMEOUT (120s)", flush=True)
+            results.append({
+                "task": task.name,
+                "category": task.category,
+                "answer": "",
+                "expected": task.expected_answer,
+                "score": 0.0,
+                "cost_usd": 0.0,
+                "total_tokens": 0,
+            })
+            continue
         except Exception as e:
-            print(f"    ERROR: {e}")
+            print(f"    ERROR: {e}", flush=True)
             results.append({
                 "task": task.name,
                 "category": task.category,
