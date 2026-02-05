@@ -1,19 +1,19 @@
 # AOrchestra Evaluation Report
 
-Generated: 2026-02-04 20:13:32
+Generated: 2026-02-04 20:41:22
 
 ## Configuration
 - **model:** glm-4.7
-- **api_base:** https://api.z.ai/api/anthropic
+- **api_base:** https://api.z.ai/api/paas/v4/
 - **strategies:** ['single']
 - **num_tasks:** 12
-- **run_date:** 2026-02-04T20:13:32.568379
+- **run_date:** 2026-02-04T20:41:22.767657
 
 ## Results Summary
 
 | Strategy | Avg Score | Total Cost | Total Tokens | Tasks |
 |----------|-----------|------------|--------------|-------|
-| single | 0.0000 | $0.000000 | 136 | 12 |
+| single | 0.0000 | $0.000000 | 5176 | 12 |
 
 ## Analysis
 

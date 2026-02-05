@@ -88,7 +88,8 @@ async def run_strategy(strategy_name: str, model_config: ModelConfig, tasks: lis
                 tool_names=task.tools or [],
                 context="",
             )
-            score = score_exact_match(answer or "", task.expected_answer)
+            # Use substring matching — LLM answers are verbose
+            score = score_exact_match(answer or "", task.expected_answer, substring=True)
 
             result = {
                 "task": task.name,
