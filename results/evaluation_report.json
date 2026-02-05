@@ -1,0 +1,139 @@
+{
+  "report_type": "aorchestra_evaluation",
+  "generated_at": "2026-02-04T20:13:32.568379",
+  "metadata": {
+    "model": "glm-4.7",
+    "api_base": "https://api.z.ai/api/anthropic",
+    "strategies": [
+      "single"
+    ],
+    "num_tasks": 12,
+    "run_date": "2026-02-04T20:13:32.568379"
+  },
+  "results": {
+    "single": {
+      "strategy": "single",
+      "avg_score": 0.0,
+      "total_cost_usd": 0.0,
+      "total_tokens": 136,
+      "num_tasks": 12,
+      "task_details": [
+        {
+          "task": "Simple Addition",
+          "category": "math",
+          "answer": "No response",
+          "expected": "120",
+          "score": 0.0,
+          "cost_usd": 0.0,
+          "total_tokens": 3
+        },
+        {
+          "task": "Multiplication with Addition",
+          "category": "math",
+          "answer": "No response",
+          "expected": "406",
+          "score": 0.0,
+          "cost_usd": 0.0,
+          "total_tokens": 7
+        },
+        {
+          "task": "Division Chain",
+          "category": "math",
+          "answer": "No response",
+          "expected": "25",
+          "score": 0.0,
+          "cost_usd": 0.0,
+          "total_tokens": 11
+        },
+        {
+          "task": "Complex Arithmetic Chain",
+          "category": "math",
+          "answer": "No response",
+          "expected": "662",
+          "score": 0.0,
+          "cost_usd": 0.0,
+          "total_tokens": 10
+        },
+        {
+          "task": "Hello World Program",
+          "category": "code",
+          "answer": "No response",
+          "expected": "Hello, World!",
+          "score": 0.0,
+          "cost_usd": 0.0,
+          "total_tokens": 12
+        },
+        {
+          "task": "Sum of Numbers 1 to 100",
+          "category": "code",
+          "answer": "No response",
+          "expected": "5050",
+          "score": 0.0,
+          "cost_usd": 0.0,
+          "total_tokens": 15
+        },
+        {
+          "task": "First 10 Fibonacci Numbers",
+          "category": "code",
+          "answer": "No response",
+          "expected": null,
+          "score": 0.0,
+          "cost_usd": 0.0,
+          "total_tokens": 15
+        },
+        {
+          "task": "Solve Quadratic Equation",
+          "category": "code",
+          "answer": "No response",
+          "expected": null,
+          "score": 0.0,
+          "cost_usd": 0.0,
+          "total_tokens": 16
+        },
+        {
+          "task": "Python Programming Information",
+          "category": "research",
+          "answer": "No response",
+          "expected": null,
+          "score": 0.0,
+          "cost_usd": 0.0,
+          "total_tokens": 14
+        },
+        {
+          "task": "Python Asyncio Information",
+          "category": "research",
+          "answer": "No response",
+          "expected": null,
+          "score": 0.0,
+          "cost_usd": 0.0,
+          "total_tokens": 11
+        },
+        {
+          "task": "File Content Summary",
+          "category": "planning",
+          "answer": "No response",
+          "expected": null,
+          "score": 0.0,
+          "cost_usd": 0.0,
+          "total_tokens": 12
+        },
+        {
+          "task": "Calculate Rectangle Area",
+          "category": "planning",
+          "answer": "No response",
+          "expected": "345",
+          "score": 0.0,
+          "cost_usd": 0.0,
+          "total_tokens": 10
+        }
+      ]
+    }
+  },
+  "summary": {
+    "best_score_strategy": "single",
+    "best_avg_score": 0.0,
+    "cheapest_strategy": "single",
+    "cheapest_cost_usd": 0.0,
+    "strategies_compared": 1
+  }
+}

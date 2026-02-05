@@ -196,6 +196,26 @@ class SubAgent:
         Returns:
             Tuple of (result_summary, artifacts, error_logs).
         """
+        # Handle different response formats (OpenAI vs Anthropic-compatible)
+        if not hasattr(response, 'choices') or response.choices is None:
+            # Try to extract content from Anthropic-style response
+            content = ""
+            if hasattr(response, 'content'):
+                if isinstance(response.content, list):
+                    content = " ".join(
+                        getattr(block, 'text', str(block))
+                        for block in response.content
+                    )
+                else:
+                    content = str(response.content)
+            elif isinstance(response, dict):
+                content = response.get('content', [{}])
+                if isinstance(content, list) and content:
+                    content = content[0].get('text', str(content))
+                else:
+                    content = str(content)
+            return content or "No response", {}, []
+
         choice = response.choices[0]
         message = choice.message
 

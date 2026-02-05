@@ -24,6 +24,8 @@ from aorchestra.evaluation.baselines import SingleAgentBaseline, StaticRolesBase
 from aorchestra.evaluation.scoring import score_exact_match
 from aorchestra.evaluation.reports import generate_json_report, generate_markdown_report
 from aorchestra.models.config import ModelConfig
+from aorchestra.tools import ToolRegistry
+from aorchestra.tools.builtins import get_builtin_tools_metadata
 
 
 def parse_args():
@@ -65,10 +67,15 @@ async def run_strategy(strategy_name: str, model_config: ModelConfig, tasks: lis
     """Run a single strategy against all tasks."""
     results = []
 
+    # Create tool registry with builtins
+    registry = ToolRegistry()
+    for metadata, tool_cls in get_builtin_tools_metadata():
+        registry.register(tool_cls(), metadata)
+
     if strategy_name == "single":
-        baseline = SingleAgentBaseline(model=model_config)
+        baseline = SingleAgentBaseline(model=model_config, tool_registry=registry)
     elif strategy_name == "static":
-        baseline = StaticRolesBaseline(model=model_config)
+        baseline = StaticRolesBaseline(model=model_config, tool_registry=registry)
     else:
         print(f"  Unknown strategy: {strategy_name}, skipping")
         return results
@@ -76,14 +83,17 @@ async def run_strategy(strategy_name: str, model_config: ModelConfig, tasks: lis
     for task in tasks:
         print(f"  Running task: {task.name}...")
         try:
-            observation, cost_record = await baseline.run(task)
-            answer = observation.result_summary if observation else ""
-            score = score_exact_match(answer, task.expected_answer)
+            answer, cost_record = await baseline.solve(
+                goal=task.goal,
+                tool_names=task.tools or [],
+                context="",
+            )
+            score = score_exact_match(answer or "", task.expected_answer)
 
             result = {
                 "task": task.name,
                 "category": task.category,
-                "answer": answer,
+                "answer": answer or "",
                 "expected": task.expected_answer,
                 "score": score,
                 "cost_usd": cost_record.estimated_cost_usd if cost_record else 0.0,
@@ -122,7 +132,7 @@ async def main():
     if args.dry_run:
         print("DRY RUN — Tasks:")
         for task in tasks:
-            print(f"  - [{task.category}] {task.name}: {task.description[:60]}...")
+            print(f"  - [{task.category}] {task.name}: {task.goal[:60]}...")
         return
 
     model_config = ModelConfig(
