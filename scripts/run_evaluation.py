@@ -47,7 +47,7 @@ def parse_args():
     )
     parser.add_argument(
         "--api-base",
-        default=os.getenv("AORCHESTRA_API_BASE", "https://api.z.ai/v1"),
+        default=os.getenv("AORCHESTRA_API_BASE", "https://api.z.ai/api/paas/v4/"),
         help="API base URL",
     )
     parser.add_argument(
@@ -139,6 +139,7 @@ async def main():
         name=args.model,
         api_base=args.api_base,
         api_key=args.api_key,
+        max_tokens=2048,  # GLM uses reasoning tokens, needs headroom
     )
 
     all_results = {}

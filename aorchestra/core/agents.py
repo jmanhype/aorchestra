@@ -115,15 +115,40 @@ class SubAgent:
         openai_tools = []
         for tool in self.tuple.tools:
             if hasattr(tool, "name") and hasattr(tool, "description"):
+                # Extract parameter schema from tool if available
+                params = {"type": "object", "properties": {}}
+                if hasattr(tool, "parameters"):
+                    params = tool.parameters
+                elif hasattr(tool, "get_schema"):
+                    params = tool.get_schema()
+                else:
+                    # Introspect execute() signature for parameter info
+                    import inspect
+                    sig = inspect.signature(tool.execute)
+                    properties = {}
+                    required = []
+                    for name, param in sig.parameters.items():
+                        if name == "self":
+                            continue
+                        ptype = "string"
+                        annotation = param.annotation
+                        if annotation in (float, int):
+                            ptype = "number"
+                        elif annotation == bool:
+                            ptype = "boolean"
+                        properties[name] = {"type": ptype}
+                        if param.default is inspect.Parameter.empty:
+                            required.append(name)
+                    params = {"type": "object", "properties": properties}
+                    if required:
+                        params["required"] = required
+
                 openai_tools.append({
                     "type": "function",
                     "function": {
                         "name": tool.name,
                         "description": tool.description,
-                        "parameters": {
-                            "type": "object",
-                            "properties": {},  # Could be enhanced with schema
-                        },
+                        "parameters": params,
                     },
                 })
         return openai_tools
@@ -255,6 +280,7 @@ class SubAgent:
                 # Parse arguments (JSON string -> dict)
                 import json
                 args = json.loads(tool_call.function.arguments)
+                logger.info(f"Tool call: {tool_name}({args})")
 
                 # Execute tool
                 result = await tool.execute(**args)
